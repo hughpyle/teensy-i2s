@@ -3,40 +3,58 @@
 #define ARM_MATH_CM4
 #include <arm_math.h>
 
+/* I2S digital audio */
 #include <i2s.h>
+
+/* Wolfson audio codec controlled by I2C */
+#include <Wire.h>
+#include <WM8731.h>
+
+/*
+  SDA -> Teensy pin 18
+  SCL -> Teensy pin 19
+  SCK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6/LLWU_P10)
+  MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12)
+*/
 
 
 void setup()
 {
   Serial.println( "Initializing" );
-  delay(2000);
   
+  delay(2000);  
   Serial.println( "Initializing." );
+  
   delay(1000);  
-  Serial.println( "Initializing.." );
+  WM8731.begin( low, 48000, 16, I2S );
+  WM8731.setActive();
+  Serial.println( "Initialized I2C" );
+  
   delay(1000);
   Serial.println( "Initializing...?" );
-  
+
   delay(1000);
   Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL), DEC );  
-  Serial.println( "I2S initialized." );  
+  Serial.println( "Initialized I2S." );  
   
-
   delay(1000);
   dma_init();
-  Serial.println( "DMA initialized." );  
+  Serial.println( "Initialized DMA." );  
 }
-
 
 
 void loop()
 {
+  uint32_t es;
+  
   delay(1000);
   Serial.println( "Waiting." );  
   
   delay(1000);
   dma_play();
-  Serial.println( "DMA playing." );  
+  Serial.println( "DMA playing." );
+  es = DMA_ERR;
+  if(es>0) Serial.println( es, DEC );  // DMA error status
 
   delay(1000);
   dma_stop();
@@ -53,6 +71,7 @@ void dma_fill( int16_t *pBuf, int16_t len )
   }
   Serial.println("fills");
 }
+
 
 //extern pointer  event_dma_rdy;
 void dma_ch0_isr(void)

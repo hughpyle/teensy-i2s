@@ -113,6 +113,11 @@ extern "C" {
 #define DMA_ATTR_SIZE_32BYTE            5
 
 /* TCD Signed Minor Loop Offset */
+#define DMA_NBYTES_SMLOE                ((uint32_t)1<<31)               // Source Minor Loop Offset Enable
+#define DMA_NBYTES_DMLOE                ((uint32_t)1<<30)               // Destination Minor Loop Offset Enable
+#define DMA_NBYTES_MLOFFNO_NBYTES(n)    ((uint32_t)(n))                 // NBytes transfer count when minor loop disabled
+#define DMA_NBYTES_MLOFFYES_NBYTES(n)   ((uint32_t)(n & 0x1F))          // NBytes transfer count when minor loop enabled
+#define DMA_NBYTES_MLOFFYES_MLOFF(n)    ((uint32_t)(n & 0xFFFFF)<<10)   // Offset 
 
 /* TCD CSR bits */
 #define DMA_CSR_START                   ((uint16_t)0x1)
@@ -174,26 +179,26 @@ extern "C" {
 /* I2S */
 
 /* TCSR bits */
-#define I2S_TCSR_TE           (uint32_t)0x80000000    // Transmitter Enable
-#define I2S_TCSR_STOPE        (uint32_t)0x40000000    // Transmitter Enable in Stop mode
-#define I2S_TCSR_DBGE         (uint32_t)0x20000000    // Transmitter Enable in Debug mode
-#define I2S_TCSR_BCE          (uint32_t)0x10000000    // Bit Clock Enable
-#define I2S_TCSR_FR           (uint32_t)0x02000000    // FIFO Reset
-#define I2S_TCSR_SR           (uint32_t)0x01000000    // Software Reset
-#define I2S_TCSR_WSF          (uint32_t)0x00100000    // Word Start Flag
-#define I2S_TCSR_SEF          (uint32_t)0x00080000    // Sync Error Flag
-#define I2S_TCSR_FEF          (uint32_t)0x00040000    // FIFO Error Flag (underrun)
-#define I2S_TCSR_FWF          (uint32_t)0x00020000    // FIFO Warning Flag (empty)
-#define I2S_TCSR_FRF          (uint32_t)0x00010000    // FIFO Request Flag
-#define I2S_TCSR_WSIE         (uint32_t)0x00001000    // Word Start Interrupt Enable
-#define I2S_TCSR_SEIE         (uint32_t)0x00000800    // Sync Error Interrupt Enable
-#define I2S_TCSR_FEIE         (uint32_t)0x00000400    // FIFO Error Interrupt Enable
-#define I2S_TCSR_FWIE         (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
-#define I2S_TCSR_FRIE         (uint32_t)0x00000100    // FIFO Request Interrupt Enable
-#define I2S_TCSR_FWDE         (uint32_t)0x00000001    // FIFO Warning DMA Enable
-#define I2S_TCSR_FRDE         (uint32_t)0x00000000    // FIFO Request DMA Enable
+#define I2S_TCSR_TE                     (uint32_t)0x80000000    // Transmitter Enable
+#define I2S_TCSR_STOPE                  (uint32_t)0x40000000    // Transmitter Enable in Stop mode
+#define I2S_TCSR_DBGE                   (uint32_t)0x20000000    // Transmitter Enable in Debug mode
+#define I2S_TCSR_BCE                    (uint32_t)0x10000000    // Bit Clock Enable
+#define I2S_TCSR_FR                     (uint32_t)0x02000000    // FIFO Reset
+#define I2S_TCSR_SR                     (uint32_t)0x01000000    // Software Reset
+#define I2S_TCSR_WSF                    (uint32_t)0x00100000    // Word Start Flag
+#define I2S_TCSR_SEF                    (uint32_t)0x00080000    // Sync Error Flag
+#define I2S_TCSR_FEF                    (uint32_t)0x00040000    // FIFO Error Flag (underrun)
+#define I2S_TCSR_FWF                    (uint32_t)0x00020000    // FIFO Warning Flag (empty)
+#define I2S_TCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag
+#define I2S_TCSR_WSIE                   (uint32_t)0x00001000    // Word Start Interrupt Enable
+#define I2S_TCSR_SEIE                   (uint32_t)0x00000800    // Sync Error Interrupt Enable
+#define I2S_TCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
+#define I2S_TCSR_FWIE                   (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
+#define I2S_TCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
+#define I2S_TCSR_FWDE                   (uint32_t)0x00000001    // FIFO Warning DMA Enable
+#define I2S_TCSR_FRDE                   (uint32_t)0x00000000    // FIFO Request DMA Enable
 
-#define I2S_TCR1_TFW(n)       (uint32_t)(n & 0x03)   // Transmit FIFO watermark
+#define I2S_TCR1_TFW(n)                 (uint32_t)(n & 0x03)   // Transmit FIFO watermark
 
 
 /* TCR2 bits */

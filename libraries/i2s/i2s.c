@@ -8,22 +8,18 @@
 // You must implement dma_ch0_isr()
 
 
-
 void i2s_io_init(void)
 {
-/*
     // set pin mux to output i2s
-    PORTE_PCR6  &= PORT_PCR_MUX_MASK;
-    PORTE_PCR7  &= PORT_PCR_MUX_MASK;
-    PORTE_PCR10 &= PORT_PCR_MUX_MASK;
-    PORTE_PCR11 &= PORT_PCR_MUX_MASK;
-    PORTE_PCR12 &= PORT_PCR_MUX_MASK;
-    PORTE_PCR6  |= PORT_PCR_MUX(0x04);
-    PORTE_PCR7  |= PORT_PCR_MUX(0x04);
-    PORTE_PCR10 |= PORT_PCR_MUX(0x04);
-    PORTE_PCR11 |= PORT_PCR_MUX(0x04);
-    PORTE_PCR12 |= PORT_PCR_MUX(0x04);
-*/
+    // using the ALT6 pin selections
+    // SCK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6)
+    // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12)
+    
+    PORTC_PCR6  &= PORT_PCR_MUX_MASK;
+    PORTC_PCR6  |= PORT_PCR_MUX(0x06);
+    
+    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
+    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
 }
 
 
@@ -144,23 +140,25 @@ void clearAudioBuffers(void)
     p3 = Audio_Silence;
     for (i=0 ; i < DMA_BUFFER_SIZE; i++) 
     {
-        *p1++ = 0;   // mute initially
-        *p2++ = 0;   // mute initially
-        *p3++ = 0;   // mute forever
+        *p1++ = i+0;   // mute initially
+        *p2++ = i+0;   // mute initially
+        *p3++ = i+0;   // mute forever
     }  
 }
 
-void dma_mux_init(void)
-{
-}
+
+#define LOOP2
 
 void dma_transmit_init(void)  
 {
     // Enable clock to the DMAMUX module
     SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
-    // disable the MUX channel while we configure
-    DMAMUX0_CHCFG0 = 0;
     
+    // configure DMA_MUX
+    DMAMUX0_CHCFG0 = 0;
+    DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(DMAMUX_SOURCE_I2S0_TX);
+    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
+
     // Enable IRQ on the DMA channel 0
     // NVIC_ENABLE_IRQ(IRQ_DMA_ERROR);
     NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
@@ -168,40 +166,58 @@ void dma_transmit_init(void)
     // Set inactive
     DMA_TCD0_CSR &= ~(DMA_CSR_ACTIVE);
     
-    // Control register
-    DMA_CR = 0              // Normal
-//      | DMA_CR_EDBG_MASK  // Stall DMA transfers when debugger is halted (avoid noise)
-//      | DMA_CR_EMLM_MASK  // minor looping
-        ;
- 
     // Set channel priorities (each must be unique)
     DMA_DCHPRI3 = 0;
     DMA_DCHPRI2 = 1;
     DMA_DCHPRI1 = 2;
     DMA_DCHPRI0 = 3;  // cannot be pre-empted, can pre-empt, highest priority
-  
+
+#ifdef LOOP1
+    // Control register
+    DMA_CR = 0              // Normal
+//      | DMA_CR_EDBG_MASK  // Stall DMA transfers when debugger is halted (avoid noise)
+//      | DMA_CR_EMLM_MASK  // minor looping
+        ;
+   
     // fill the TCD regs
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ; // alternated with Audio_Source_Blk_B by our interrupt handler
-    DMA_TCD0_SOFF           = 2;                              // 2 byte offset 
+    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ;       // alternated with Audio_Source_Blk_B by our interrupt handler
+    DMA_TCD0_SOFF           = 2;                                    // 2 byte offset 
     DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)
                             | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
                             | DMA_ATTR_DMOD(0)
-                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);   // Transfer one word at a time
-    DMA_TCD0_NBYTES_MLNO    = 2;                              // one  16bit sample every minor loop
-    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);         // source address will always be newly written before each new start
-    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;    // Destination is the I2S data register
-    DMA_TCD0_DOFF           = 0;                                // Zero offset
-    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;         // total samples ( 128 )
-    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;         // no chan links, total samples ( 128 )
-    DMA_TCD0_DLASTSGA       = 0;                       // no scatter/gather
-    
-    // interrupt on major loop completion
-    DMA_TCD0_CSR = DMA_CSR_INTMAJOR;
-  
-    // configure DMA_MUX
-    DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(DMAMUX_SOURCE_I2S0_TX);
-    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
-  
+                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Transfer one word at a time
+    DMA_TCD0_NBYTES_MLNO    = 2;                                    // one  16bit sample every minor loop
+    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // source address will always be newly written before each new start
+    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
+    DMA_TCD0_DOFF           = 0;                                    // Zero offset
+    DMA_TCD0_DLASTSGA       = 0;                                    // no scatter/gather
+    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // total samples (128)
+    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // no chan links, total samples (128)
+    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR;                     // interrupt on major loop completion
+#endif
+
+#ifdef LOOP2
+    // Control register
+    DMA_CR = DMA_CR_EMLM  // minor looping
+        ;
+   
+    // fill the TCD regs
+    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ;       // alternated with Audio_Source_Blk_B by our interrupt handler
+    DMA_TCD0_SOFF           = DMA_NBYTES_SMLOE
+                            | DMA_NBYTES_MLOFFYES_MLOFF(2 - DMA_BUFFER_SIZE*2*2*2)
+                            | DMA_NBYTES_MLOFFYES_NBYTES(2*2);
+    DMA_TCD0_ATTR           = DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
+                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Transfer one word at a time, no modulo
+    DMA_TCD0_NBYTES_MLNO    = 2;                                    // one  16bit sample every minor loop
+    DMA_TCD0_SLAST          = -(DMA_BUFFER_SIZE*2*2*3 - 2);0;
+    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
+    DMA_TCD0_DOFF           = 0;                                    // Zero offset
+    DMA_TCD0_DLASTSGA       = 0;                                    // no scatter/gather
+    DMA_TCD0_CITER_ELINKNO  = (DMA_BUFFER_SIZE*2) & DMA_CITER_MASK;     // total samples (128)
+    DMA_TCD0_BITER_ELINKNO  = (DMA_BUFFER_SIZE*2) & DMA_BITER_MASK;     // no chan links, total samples (128)
+    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR | DMA_CSR_INTHALF;
+#endif
+
     // enable DMA channel 0 requests
     //DMA_ERQ = DMA_ERQ_ERQ0;
     DMA_SERQ = DMA_SERQ_SERQ(0);
@@ -219,8 +235,7 @@ void dma_transmit_init(void)
 void hal_dma_init_for_i2s(uint buf_rx, uint buf_tx, uint block_n_sample, uint sample_n_byte)
 {
     uint size_bit;
-    DMA_TCD tcd;
-    
+    DMA_TCD tcd;    
     switch(sample_n_byte)
     {
         case 1: size_bit = DMA_SIZE_8_BIT; break;
