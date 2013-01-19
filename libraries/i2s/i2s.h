@@ -25,56 +25,112 @@ extern "C" {
 /* ES - Error Status */
 
 /* ERQ - Enable Request Register */
-#define DMA_ERQ_ERQ0                    ((uint32_t)0x1)         // Enable DMA Request 0
-#define DMA_ERQ_ERQ1                    ((uint32_t)0x2)         // Enable DMA Request 1
-#define DMA_ERQ_ERQ2                    ((uint32_t)0x4)         // Enable DMA Request 2
-#define DMA_ERQ_ERQ3                    ((uint32_t)0x8)         // Enable DMA Request 3
+#define DMA_ERQ_ERQ0                    ((uint32_t)1<<0)         // Enable DMA Request 0
+#define DMA_ERQ_ERQ1                    ((uint32_t)1<<1)         // Enable DMA Request 1
+#define DMA_ERQ_ERQ2                    ((uint32_t)1<<2)         // Enable DMA Request 2
+#define DMA_ERQ_ERQ3                    ((uint32_t)1<<3)         // Enable DMA Request 3
 
 /* EEI - Enable Error Interrupt Register */
+#define DMA_EEI_EEI0                    ((uint32_t)1<<0)        // Enable Error Interrupt 0
+#define DMA_EEI_EEI1                    ((uint32_t)1<<1)        // Enable Error Interrupt 1
+#define DMA_EEI_EEI2                    ((uint32_t)1<<2)        // Enable Error Interrupt 2
+#define DMA_EEI_EEI3                    ((uint32_t)1<<3)        // Enable Error Interrupt 3
 
 /* CEEI - Clear Enable Error Interrupt Register */
+#define DMA_CEEI_CEEI(n)                ((uint8_t)(n & 3)<<0)   // Clear Enable Error Interrupt
+#define DMA_CEEI_CAEE                   ((uint8_t)1<<6)         // Clear All Enable Error Interrupts
+#define DMA_CEEI_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* SEEI - Set Enable Error Interrupt Register */
+#define DMA_SEEI_SEEI(n)                ((uint8_t)(n & 3)<<0)   // Set Enable Error Interrupt
+#define DMA_SEEI_SAEE                   ((uint8_t)1<<6)         // Set All Enable Error Interrupts
+#define DMA_SEEI_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* CERQ - Clear Enable Request Register */
+#define DMA_CERQ_CERQ(n)                ((uint8_t)(n & 3)<<0)   // Clear Enable Request
+#define DMA_CERQ_CAER                   ((uint8_t)1<<6)         // Clear All Enable Requests
+#define DMA_CERQ_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* SERQ - Set Enable Request Register */
+#define DMA_SERQ_SERQ(n)                ((uint8_t)(n & 3)<<0)   // Set Enable Request
+#define DMA_SERQ_SAER                   ((uint8_t)1<<6)         // Set All Enable Requests
+#define DMA_SERQ_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* CDNE - Clear DONE Status Bit Register */
+#define DMA_CDNE_CDNE(n)                ((uint8_t)(n & 3)<<0)   // Clear Done Bit
+#define DMA_CDNE_CADN                   ((uint8_t)1<<6)         // Clear All Done Bits
+#define DMA_CDNE_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* SSRT - Set START Bit Register */
+#define DMA_SSRT_SSRT(n)                ((uint8_t)(n & 3)<<0)   // Set Start Bit
+#define DMA_SSRT_SAST                   ((uint8_t)1<<6)         // Set All Start Bits
+#define DMA_SSRT_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* CERR - Clear Error Register */
+#define DMA_CERR_CERR(n)                ((uint8_t)(n & 3)<<0)   // Clear Error Indicator
+#define DMA_CERR_CAEI                   ((uint8_t)1<<6)         // Clear All Error Indicators
+#define DMA_CERR_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* CINT - Clear Interrupt Request Register */
-#define DMA_CINT_NOP                    (uint8_t)0x80      // No Operation (ignore the other bits in this register)
-#define DMA_CINT_CINT(n)                (uint8_t)0x40      // Clear Interrupt Request
-#define DMA_CINT_CINT(n)                (uint8_t)(n & 3)   // Clear Interrupt Request
+#define DMA_CINT_CINT(n)                ((uint8_t)(n & 3)<<0)   // Clear Interrupt Request
+#define DMA_CINT_CAIR                   ((uint8_t)1<<6)         // Clear All Interrupt Requests
+#define DMA_CINT_NOP                    ((uint8_t)1<<7)         // NOP
 
 /* INT - Interrupt Request Register */
+#define DMA_INT_INT0                    ((uint32_t)1<<0)        // Interrupt Request 0
+#define DMA_INT_INT1                    ((uint32_t)1<<1)        // Interrupt Request 1
+#define DMA_INT_INT2                    ((uint32_t)1<<2)        // Interrupt Request 2
+#define DMA_INT_INT3                    ((uint32_t)1<<3)        // Interrupt Request 3
 
 /* ERR - Error Register */
+#define DMA_ERR_ERR0                    ((uint32_t)1<<0)        // Error in Channel 0
+#define DMA_ERR_ERR1                    ((uint32_t)1<<1)        // Error in Channel 1
+#define DMA_ERR_ERR2                    ((uint32_t)1<<2)        // Error in Channel 2
+#define DMA_ERR_ERR3                    ((uint32_t)1<<3)        // Error in Channel 3
 
 /* HRS - Hardware Request Status Register */
+#define DMA_HRS_HRS0                    ((uint32_t)1<<0)        // Hardware Request Status Channel 0
+#define DMA_HRS_HRS1                    ((uint32_t)1<<1)        // Hardware Request Status Channel 1
+#define DMA_HRS_HRS2                    ((uint32_t)1<<2)        // Hardware Request Status Channel 2
+#define DMA_HRS_HRS3                    ((uint32_t)1<<3)        // Hardware Request Status Channel 3
 
-/* TCD CSR bits */
-#define DMA_CSR_START                            ((uint16_t)0x1)
-#define DMA_CSR_INTMAJOR                         ((uint16_t)0x2)
-#define DMA_CSR_INTHALF                          ((uint16_t)0x4)
-#define DMA_CSR_DREQ                             ((uint16_t)0x8)
-#define DMA_CSR_ESG                              ((uint16_t)0x10)
-#define DMA_CSR_MAJORELINK                       ((uint16_t)0x20)
-#define DMA_CSR_ACTIVE                           ((uint16_t)0x40)
-#define DMA_CSR_DONE                             ((uint16_t)0x80)
-#define DMA_CSR_MAJORLINKCH(n)                   ((uint16_t)(n & 0x3)<<8)       // Link Channel Number
-#define DMA_CSR_BWC(n)                           ((uint16_t)(n & 0x3)<<14)      // Bandwidth Control
+/* DMA_DCHPRI - Channel n Priority Register */
+#define DMA_DCHPRI_CHPRI(n)             ((uint8_t)(n & 3)<<0)   // Channel Arbitration Priority
+#define DMA_DCHPRI_DPA                  ((uint8_t)1<<6)         // Disable PreEmpt Ability
+#define DMA_DCHPRI_ECP                  ((uint8_t)1<<7)         // Enable PreEmption
+
 
 /* TCD ATTR - Transfer Attributes */
-#define DMA_ATTR_DSIZE(n)                        ((uint16_t)(n & 0x07))         // Destination Data Transfer Size
-#define DMA_ATTR_DMOD(n)                         ((uint16_t)(n & 0x1f)<<3)      // Destination Address Modulo
-#define DMA_ATTR_SSIZE(n)                        ((uint16_t)(n & 0x07)<<8)      // Source Data Transfer Size
-#define DMA_ATTR_SMOD(n)                         ((uint16_t)(n & 0x1f)<<11)     // Source Address Modulo
+#define DMA_ATTR_DSIZE(n)               ((uint16_t)(n & 0x07))         // Destination Data Transfer Size
+#define DMA_ATTR_DMOD(n)                ((uint16_t)(n & 0x1f)<<3)      // Destination Address Modulo
+#define DMA_ATTR_SSIZE(n)               ((uint16_t)(n & 0x07)<<8)      // Source Data Transfer Size
+#define DMA_ATTR_SMOD(n)                ((uint16_t)(n & 0x1f)<<11)     // Source Address Modulo
 
+#define DMA_ATTR_SIZE_8BIT              0
+#define DMA_ATTR_SIZE_16BIT             1
+#define DMA_ATTR_SIZE_32BIT             2
+#define DMA_ATTR_SIZE_16BYTE            4
+#define DMA_ATTR_SIZE_32BYTE            5
+
+/* TCD Signed Minor Loop Offset */
+
+/* TCD CSR bits */
+#define DMA_CSR_START                   ((uint16_t)0x1)
+#define DMA_CSR_INTMAJOR                ((uint16_t)0x2)
+#define DMA_CSR_INTHALF                 ((uint16_t)0x4)
+#define DMA_CSR_DREQ                    ((uint16_t)0x8)
+#define DMA_CSR_ESG                     ((uint16_t)0x10)
+#define DMA_CSR_MAJORELINK              ((uint16_t)0x20)
+#define DMA_CSR_ACTIVE                  ((uint16_t)0x40)
+#define DMA_CSR_DONE                    ((uint16_t)0x80)
+#define DMA_CSR_MAJORLINKCH(n)          ((uint16_t)(n & 3)<<8)       // Link Channel Number
+#define DMA_CSR_BWC(n)                  ((uint16_t)(n & 3)<<14)      // Bandwidth Control
+
+#define DMA_CITER_MASK                  ((uint16_t)0x7FFF)     // Loop count mask
+#define DMA_CITER_ELINK                 ((uint16_t)1<<15)      // Enable channel linking on minor-loop complete
+
+#define DMA_BITER_MASK                  ((uint16_t)0x7FFF)     // Loop count mask
+#define DMA_BITER_ELINK                 ((uint16_t)1<<15)      // Enable channel linking on minor-loop complete
 
 
 /* DMAMUX Channel Configuration bits */
@@ -82,7 +138,38 @@ extern "C" {
 #define DMAMUX_CHCFG_TRIG                ((uint8_t)0x40)         // DMA Channel Trigger Enable
 #define DMAMUX_CHCFG_SOURCE(n)           ((uint8_t)(n & 0x3f))      // DMA Channel Source
 
-
+/* DMAMUX Request Source IDs */
+#define DMAMUX_SOURCE_UART0_RX           2
+#define DMAMUX_SOURCE_UART0_TX           3
+#define DMAMUX_SOURCE_UART1_RX           4
+#define DMAMUX_SOURCE_UART1_TX           5
+#define DMAMUX_SOURCE_UART2_RX           6
+#define DMAMUX_SOURCE_UART2_TX           7
+#define DMAMUX_SOURCE_I2S0_RX            14
+#define DMAMUX_SOURCE_I2S0_TX            15
+#define DMAMUX_SOURCE_SPI0_RX            16
+#define DMAMUX_SOURCE_SPI0_TX            17
+#define DMAMUX_SOURCE_I2C0               22
+#define DMAMUX_SOURCE_FTM0_CH0           24
+#define DMAMUX_SOURCE_FTM0_CH1           25
+#define DMAMUX_SOURCE_FTM0_CH2           26
+#define DMAMUX_SOURCE_FTM0_CH3           27
+#define DMAMUX_SOURCE_FTM0_CH4           28
+#define DMAMUX_SOURCE_FTM0_CH5           29
+#define DMAMUX_SOURCE_FTM0_CH6           30
+#define DMAMUX_SOURCE_FTM0_CH7           31
+#define DMAMUX_SOURCE_FTM1_CH0           32
+#define DMAMUX_SOURCE_FTM1_CH1           33
+#define DMAMUX_SOURCE_ADC0               40
+#define DMAMUX_SOURCE_CMP0               42
+#define DMAMUX_SOURCE_CMP1               43
+#define DMAMUX_SOURCE_CMT                47
+#define DMAMUX_SOURCE_PDB                48
+#define DMAMUX_SOURCE_PORTA              49
+#define DMAMUX_SOURCE_PORTB              50
+#define DMAMUX_SOURCE_PORTC              51
+#define DMAMUX_SOURCE_PORTD              52
+#define DMAMUX_SOURCE_PORTE              53
 
 /* I2S */
 
@@ -110,7 +197,7 @@ extern "C" {
 
 
 /* TCR2 bits */
-#define I2S_TCR2_DIV(n)       (uint32_t)((n)&0x0f)          // Bit clock divide by (DIV+1)*2
+#define I2S_TCR2_DIV(n)       (uint32_t)(n & 0x0f)          // Bit clock divide by (DIV+1)*2
 #define I2S_TCR2_BCD          (uint32_t)0x1000000           // Bit clock direction
 #define I2S_TCR2_BCP          (uint32_t)0x2000000           // Bit clock polarity
 #define I2S_TCR2_MSEL(n)      (uint32_t)((n & 3)<<26)       // MCLK select

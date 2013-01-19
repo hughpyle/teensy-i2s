@@ -16,8 +16,8 @@ void setup()
   Serial.println( "Initializing.." );
   delay(1000);
   Serial.println( "Initializing...?" );
+  
   delay(1000);
-  Serial.println( "f" );
   Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL), DEC );  
   Serial.println( "I2S initialized." );  
   

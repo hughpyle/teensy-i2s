@@ -89,9 +89,6 @@ int i2s_init(unsigned char clk)
     if( I2S0_TCSR & I2S_TCSR_TE )
         return -1;
 
-    // Transmit enable
-    I2S0_TCSR |= I2S_TCSR_TE;
-    
     // transmit configuration register 2
     I2S0_TCR2 =
           I2S_TCR2_SYNC(00)   // asynchronous mode
@@ -155,14 +152,15 @@ void clearAudioBuffers(void)
 
 void dma_mux_init(void)
 {
-    SIM_SCGC6 |= SIM_SCGC6_DMAMUX;                // Enable clock to the DMAMUX module
-    DMAMUX0_CHCFG0 = 0;                           // disable the channel to configure it 
-    DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(15) ;    // I2S0 Transmit
-    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL;          // enable the mux
 }
 
 void dma_transmit_init(void)  
 {
+    // Enable clock to the DMAMUX module
+    SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+    // disable the MUX channel while we configure
+    DMAMUX0_CHCFG0 = 0;
+    
     // Enable IRQ on the DMA channel 0
     // NVIC_ENABLE_IRQ(IRQ_DMA_ERROR);
     NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
@@ -176,30 +174,37 @@ void dma_transmit_init(void)
 //      | DMA_CR_EMLM_MASK  // minor looping
         ;
  
-    // Set channel priority
+    // Set channel priorities (each must be unique)
     DMA_DCHPRI3 = 0;
-    DMA_DCHPRI2 = 0;
-    DMA_DCHPRI1 = 0;
-    DMA_DCHPRI0 = 15;  // cannot be pre-empted, can pre-empt, highest priority
+    DMA_DCHPRI2 = 1;
+    DMA_DCHPRI1 = 2;
+    DMA_DCHPRI0 = 3;  // cannot be pre-empted, can pre-empt, highest priority
   
     // fill the TCD regs
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ; // alternated with Audio_Source_Blk_B
+    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ; // alternated with Audio_Source_Blk_B by our interrupt handler
     DMA_TCD0_SOFF           = 2;                              // 2 byte offset 
-    DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0) | DMA_ATTR_SSIZE(1) | DMA_ATTR_DMOD(0) | DMA_ATTR_DSIZE(1);   // no circular addressing S&D, 16 bit S&D 
-    DMA_TCD0_NBYTES_MLNO    = 2;                              // one  16bit sample every minor loop 
-    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);         // source address will always be newly written before each new start  DMA_TCD0_DADDR  
-    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;    // the FTM Channel 0 duty value
-    DMA_TCD0_DOFF           = 0;
-    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE;         // total samples ( 128 )
-    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE;         // no chan links, total samples ( 128 )
-    DMA_TCD0_DLASTSGA       = 0;                       // no final last adjustment ( does not move )
-    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR;        // interrupt when done  
+    DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)
+                            | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
+                            | DMA_ATTR_DMOD(0)
+                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);   // Transfer one word at a time
+    DMA_TCD0_NBYTES_MLNO    = 2;                              // one  16bit sample every minor loop
+    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);         // source address will always be newly written before each new start
+    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;    // Destination is the I2S data register
+    DMA_TCD0_DOFF           = 0;                                // Zero offset
+    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;         // total samples ( 128 )
+    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;         // no chan links, total samples ( 128 )
+    DMA_TCD0_DLASTSGA       = 0;                       // no scatter/gather
+    
+    // interrupt on major loop completion
+    DMA_TCD0_CSR = DMA_CSR_INTMAJOR;
   
-    // configure DMA_MUX to trigger DMA channel 0  with FTM2 CH1 
-    dma_mux_init();
+    // configure DMA_MUX
+    DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(DMAMUX_SOURCE_I2S0_TX);
+    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
   
-    // enable chan0 for hardware trigger
-    DMA_ERQ = DMA_ERQ_ERQ0;
+    // enable DMA channel 0 requests
+    //DMA_ERQ = DMA_ERQ_ERQ0;
+    DMA_SERQ = DMA_SERQ_SERQ(0);
   
     // Set active
     DMA_TCD0_CSR |= DMA_CSR_ACTIVE;
