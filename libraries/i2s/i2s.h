@@ -22,7 +22,7 @@ extern "C" {
 #define I2S_TCSR_SEF                    (uint32_t)0x00080000    // Sync Error Flag
 #define I2S_TCSR_FEF                    (uint32_t)0x00040000    // FIFO Error Flag (underrun)
 #define I2S_TCSR_FWF                    (uint32_t)0x00020000    // FIFO Warning Flag (empty)
-#define I2S_TCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag
+#define I2S_TCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag (Data Ready)
 #define I2S_TCSR_WSIE                   (uint32_t)0x00001000    // Word Start Interrupt Enable
 #define I2S_TCSR_SEIE                   (uint32_t)0x00000800    // Sync Error Interrupt Enable
 #define I2S_TCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
@@ -274,7 +274,7 @@ extern int16_t Audio_Source_Blk_A[DMA_BUFFER_SIZE], Audio_Source_Blk_B[DMA_BUFFE
  
 void i2s_io_init(void);
 void i2s_switch_clock(unsigned char clk);
-int i2s_init(unsigned char clk);
+int i2s_init(unsigned char clk, unsigned char useDMA);
 
 /*
  * DMA for the I2S interface

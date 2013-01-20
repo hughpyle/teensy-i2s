@@ -1,31 +1,38 @@
 #include <mk20dx128.h>
+#include "core_pins.h"
 #include "i2s.h"
 
 // Setup functions for i2s
 
 // Timings assume 96MHz system clock (overclocked Teensy 3.0)
 
-// You must implement dma_ch0_isr()
-
+// If using DMA, caller must implement dma_ch0_isr()
+// If not using DMA, caller must implement i2s0_tx_isr().
+ 
 
 void i2s_io_init(void)
 {
     // set pin mux to output i2s
     // using the ALT6 pin selections
-    // SCK  -> Teensy 9 (ALT6 I2S0_TX_BCLK) (PTC3)
-    // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12)
-    // DACL -> Teensy 4 (ALT6 I2S0_TX_FS) (PTA13)
-    // xxxx -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6) -- available if you need it (12.288MHz)
     
+    // SCK  -> Teensy 9 (ALT6 I2S0_TX_BCLK) (PTC3) -- bit clock
     PORTC_PCR3  &= PORT_PCR_MUX_MASK;
     PORTC_PCR3  |= PORT_PCR_MUX(0x06);
 
-    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
-    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
+    // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) -- data
+    //PORTA_PCR12 &= PORT_PCR_MUX_MASK;
+    //PORTA_PCR12 |= PORT_PCR_MUX(0x06);
+    //CORE_PIN3_CONFIG = PORT_PCR_MUX(6)|PORT_PCR_SRE;//|PORT_PCR_ODE;
     
+    // MOSI -> Teensy 22 (ALT6 I2S0_TXD0) (PTC1) -- data
+    PORTC_PCR1  &= PORT_PCR_MUX_MASK;
+    PORTC_PCR1  |= PORT_PCR_MUX(0x06);
+    
+    // DACL -> Teensy 4 (ALT6 I2S0_TX_FS) (PTA13) -- word clock
     PORTA_PCR13 &= PORT_PCR_MUX_MASK;
     PORTA_PCR13 |= PORT_PCR_MUX(0x06);
     
+    // MCLK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6) -- available if you need it (12.288MHz master clock)
 //  PORTC_PCR6  &= PORT_PCR_MUX_MASK;
 //  PORTC_PCR6  |= PORT_PCR_MUX(0x06);
 }
@@ -77,7 +84,7 @@ void i2s_switch_clock(unsigned char clk)
 
 
 
-int i2s_init(unsigned char clk)
+int i2s_init(unsigned char clk, unsigned char useDMA)
 {
     int i;
     i2s_io_init();
@@ -111,6 +118,7 @@ int i2s_init(unsigned char clk)
     }
 
     // transmit configuration register 3
+    I2S0_TMR = 0;
     I2S0_TCR3 =
         I2S_TCR3_TCE;       // transmit data channel is enabled
                             // First word sets the word flag
@@ -119,7 +127,7 @@ int i2s_init(unsigned char clk)
     {
         I2S0_TCR4 =
             I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(3)    // length of frame sync in bit clocks (3 plus one)
+          | I2S_TCR4_SYWD(15)   // length of frame sync in bit clocks (15 plus one)
           | I2S_TCR4_MF         // MSB first
           ;
     }
@@ -127,7 +135,7 @@ int i2s_init(unsigned char clk)
     {
         I2S0_TCR4 =
             I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(3)    // length of frame sync in bit clocks (3 plus one)
+          | I2S_TCR4_SYWD(15)   // length of frame sync in bit clocks (15 plus one) => word clock with 50/50 duty cycle
           | I2S_TCR4_MF         // MSB first
           | I2S_TCR4_FSD        // Frame sync is generated internally (master)
           | I2S_TCR4_FSE        // Frame sync one bit before the frame
@@ -137,16 +145,31 @@ int i2s_init(unsigned char clk)
     I2S0_TCR5 =
         I2S_TCR5_WNW(15)        // 16 bits per word excxept for first frame
       | I2S_TCR5_W0W(15)        // 16 bits per word there too
+      | I2S_TCR5_FBT(0x1f)         // first Bit Shifted = 0, so data is aligned to the MSB of the FIFO register
       ;
 
-    // transmit enable
-    I2S0_TCSR |=
-        I2S_TCSR_TE     |       // Transmit Enable
-        I2S_TCSR_BCE    |       // Bit Clock Enable
-        I2S_TCSR_FRDE;          // FIFO Request DMA Enable
+
+    if( useDMA )
+    {
+        // Transmit enable.  When FIFO needs data it generates a DMA request.
+        I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
+                   | I2S_TCSR_BCE           // Bit Clock Enable
+                   | I2S_TCSR_FRDE          // FIFO Request DMA Enable
+                   ;
+    }
+    else
+    {
+        // Transmit enable.  When FIFO needs data it generates an interrupt.
+        NVIC_ENABLE_IRQ(IRQ_I2S0_TX);
+        I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
+                   | I2S_TCSR_BCE           // Bit Clock Enable
+                   | I2S_TCSR_FRIE          // FIFO Request Interrupt Enable
+                   ;
+    }
 
     return 0;
 }
+
 
 
 /*
