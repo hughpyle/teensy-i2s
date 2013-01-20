@@ -17,6 +17,9 @@
   MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12)
 */
 
+const int dodma = 0;
+
+
 
 void setup()
 {
@@ -25,8 +28,17 @@ void setup()
   delay(2000);  
   Serial.println( "Initializing." );
   
-  delay(1000);  
-  WM8731.begin( low, 48000, 16, I2S );
+  delay(1000);
+  if( dodma )
+  {
+    unsigned char interface = 1; WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) | WM8731_INTERFACE_MASTER;
+    WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
+  }
+  else
+  {
+    unsigned char interface = WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16);
+    WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
+  }
   WM8731.setActive();
   Serial.println( "Initialized I2C" );
   
@@ -34,13 +46,26 @@ void setup()
   Serial.println( "Initializing...?" );
 
   delay(1000);
-  Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL), DEC );  
+  if( dodma )
+  {
+    // DMA and external clock, 48k sample rate
+    Serial.println( i2s_init(I2S_CLOCK_EXTERNAL), DEC );  
+  }
+  else
+  {
+    // Internal clock, 48k
+    Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL), DEC );  
+  }
   Serial.println( "Initialized I2S." );  
-  
-  delay(1000);
-  dma_init();
-  Serial.println( "Initialized DMA." );  
+
+  if( dodma )
+  {  
+    delay(1000);
+    dma_init();
+    Serial.println( "Initialized DMA." );  
+  }
 }
+
 
 
 void loop()
@@ -50,15 +75,24 @@ void loop()
   delay(1000);
   Serial.println( "Waiting." );  
   
-  delay(1000);
-  dma_play();
-  Serial.println( "DMA playing." );
-  es = DMA_ERR;
-  if(es>0) Serial.println( es, DEC );  // DMA error status
-
-  delay(1000);
-  dma_stop();
-  Serial.println( "DMA stopped." );  
+  if( dodma )
+  {
+    delay(1000);
+    dma_play();
+    Serial.println( "DMA playing." );
+    es = DMA_ERR;
+    if(es>0) Serial.println( es, DEC );  // DMA error status
+  
+    delay(1000);
+    dma_stop();
+    Serial.println( "DMA stopped." );  
+  }
+  else
+  {
+    // Bang some data at the I2S port directly
+    delay(1000);
+    Serial.println( "I2S playing." );
+  }
 }
 
 

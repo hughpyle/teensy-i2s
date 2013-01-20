@@ -9,8 +9,78 @@ extern "C" {
 /* ------ Hardware ----------------------------- */
 /* ------ Move this stuff to mk20dx128.h ------- */
 
-// DMA
-#define INT_DMA0                         16
+/* I2S */
+
+/* TCSR bits */
+#define I2S_TCSR_TE                     (uint32_t)0x80000000    // Transmitter Enable
+#define I2S_TCSR_STOPE                  (uint32_t)0x40000000    // Transmitter Enable in Stop mode
+#define I2S_TCSR_DBGE                   (uint32_t)0x20000000    // Transmitter Enable in Debug mode
+#define I2S_TCSR_BCE                    (uint32_t)0x10000000    // Bit Clock Enable
+#define I2S_TCSR_FR                     (uint32_t)0x02000000    // FIFO Reset
+#define I2S_TCSR_SR                     (uint32_t)0x01000000    // Software Reset
+#define I2S_TCSR_WSF                    (uint32_t)0x00100000    // Word Start Flag
+#define I2S_TCSR_SEF                    (uint32_t)0x00080000    // Sync Error Flag
+#define I2S_TCSR_FEF                    (uint32_t)0x00040000    // FIFO Error Flag (underrun)
+#define I2S_TCSR_FWF                    (uint32_t)0x00020000    // FIFO Warning Flag (empty)
+#define I2S_TCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag
+#define I2S_TCSR_WSIE                   (uint32_t)0x00001000    // Word Start Interrupt Enable
+#define I2S_TCSR_SEIE                   (uint32_t)0x00000800    // Sync Error Interrupt Enable
+#define I2S_TCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
+#define I2S_TCSR_FWIE                   (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
+#define I2S_TCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
+#define I2S_TCSR_FWDE                   (uint32_t)0x00000001    // FIFO Warning DMA Enable
+#define I2S_TCSR_FRDE                   (uint32_t)0x00000000    // FIFO Request DMA Enable
+
+#define I2S_TCR1_TFW(n)                 (uint32_t)(n & 0x03)   // Transmit FIFO watermark
+
+
+/* TCR2 bits */
+#define I2S_TCR2_DIV(n)       ((uint32_t)n & 0xff)          // Bit clock divide by (DIV+1)*2
+#define I2S_TCR2_BCD          ((uint32_t)0x1000000)         // Bit clock direction
+#define I2S_TCR2_BCP          ((uint32_t)0x2000000)         // Bit clock polarity
+#define I2S_TCR2_MSEL(n)      ((uint32_t)(n & 3)<<26)       // MCLK select, 0=bus clock, 1=I2S0_MCLK
+#define I2S_TCR2_BCI          ((uint32_t)0x10000000)        // Bit clock input
+#define I2S_TCR2_BCS          ((uint32_t)0x20000000)        // Bit clock swap
+#define I2S_TCR2_SYNC(n)      ((uint32_t)(n & 3)<<30)       // 0=async 1=sync with receiver
+
+/* TCR3 bits */
+#define I2S_TCR3_WDFL(n)      ((uint32_t)(n & 0x0f))        // word flag configuration
+#define I2S_TCR3_TCE          (uint32_t)0x10000             // transmit channel enable
+
+/* TCR4 bits */
+#define I2S_TCR4_FSD          (uint32_t)0x1                 // Frame Sync Direction
+#define I2S_TCR4_FSP          (uint32_t)0x2                 // Frame Sync Polarity
+#define I2S_TCR4_FSE          (uint32_t)0x8                 // Frame Sync Early
+#define I2S_TCR4_MF           (uint32_t)0x10                // MSB First
+#define I2S_TCR4_SYWD(n)      (uint32_t)((n & 0x1f)<<8)     // Sync Width
+#define I2S_TCR4_FRSZ(n)      (uint32_t)((n & 0x0f)<<16)    // Frame Size
+
+/* TCR5 bits */
+#define I2S_TCR5_FBT(n)       (uint32_t)((n & 0x1f)<<8)     // First Bit Shifted
+#define I2S_TCR5_W0W(n)       (uint32_t)((n & 0x1f)<<16)    // Word 0 Width
+#define I2S_TCR5_WNW(n)       (uint32_t)((n & 0x1f)<<24)    // Word N Width
+
+/* TDR Bit Fields */
+#define I2S_TDR_TDR(n)        (uint32_t)(n)
+
+/* TFR Bit Fields */
+#define I2S_TFR_RFP(n)        (uint32_t)(n & 5)             // read FIFO pointer
+#define I2S_TFR_WFP(n)        (uint32_t)((n & 5)<<16)       // write FIFO pointer
+
+/* TMR Bit Fields */
+#define I2S_TMR_TWM(n)        (uint32_t)(n & 0xFFFFFFFF)
+
+// I2S0_MCR bits
+#define I2S_MCR_DUF           (uint32_t)(1<<31)             // Divider Update Flag
+#define I2S_MCR_MOE           (uint32_t)(1<<30)             // MCLK Output Enable
+#define I2S_MCR_MICS(n)       (uint32_t)((n & 3)<<24)       // MCLK Input Clock Select
+
+// I2S0_MDR bits
+#define I2S_MDR_FRACT(n)      (uint32_t)((n & 0xff)<<12)    // MCLK Fraction
+#define I2S_MDR_DIVIDE(n)     (uint32_t)((n & 0xfff))       // MCLK Divide
+
+
+/* DMA */
 
 /* CR - DMA Control Register */
 #define DMA_CR_CX                       ((uint32_t)(1<<17))     // Cancel Transfer
@@ -176,76 +246,6 @@ extern "C" {
 #define DMAMUX_SOURCE_PORTD              52
 #define DMAMUX_SOURCE_PORTE              53
 
-/* I2S */
-
-/* TCSR bits */
-#define I2S_TCSR_TE                     (uint32_t)0x80000000    // Transmitter Enable
-#define I2S_TCSR_STOPE                  (uint32_t)0x40000000    // Transmitter Enable in Stop mode
-#define I2S_TCSR_DBGE                   (uint32_t)0x20000000    // Transmitter Enable in Debug mode
-#define I2S_TCSR_BCE                    (uint32_t)0x10000000    // Bit Clock Enable
-#define I2S_TCSR_FR                     (uint32_t)0x02000000    // FIFO Reset
-#define I2S_TCSR_SR                     (uint32_t)0x01000000    // Software Reset
-#define I2S_TCSR_WSF                    (uint32_t)0x00100000    // Word Start Flag
-#define I2S_TCSR_SEF                    (uint32_t)0x00080000    // Sync Error Flag
-#define I2S_TCSR_FEF                    (uint32_t)0x00040000    // FIFO Error Flag (underrun)
-#define I2S_TCSR_FWF                    (uint32_t)0x00020000    // FIFO Warning Flag (empty)
-#define I2S_TCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag
-#define I2S_TCSR_WSIE                   (uint32_t)0x00001000    // Word Start Interrupt Enable
-#define I2S_TCSR_SEIE                   (uint32_t)0x00000800    // Sync Error Interrupt Enable
-#define I2S_TCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
-#define I2S_TCSR_FWIE                   (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
-#define I2S_TCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
-#define I2S_TCSR_FWDE                   (uint32_t)0x00000001    // FIFO Warning DMA Enable
-#define I2S_TCSR_FRDE                   (uint32_t)0x00000000    // FIFO Request DMA Enable
-
-#define I2S_TCR1_TFW(n)                 (uint32_t)(n & 0x03)   // Transmit FIFO watermark
-
-
-/* TCR2 bits */
-#define I2S_TCR2_DIV(n)       (uint32_t)(n & 0x0f)          // Bit clock divide by (DIV+1)*2
-#define I2S_TCR2_BCD          (uint32_t)0x1000000           // Bit clock direction
-#define I2S_TCR2_BCP          (uint32_t)0x2000000           // Bit clock polarity
-#define I2S_TCR2_MSEL(n)      (uint32_t)((n & 3)<<26)       // MCLK select
-#define I2S_TCR2_BCI          (uint32_t)0x10000000          // Bit clock input
-#define I2S_TCR2_BCS          (uint32_t)0x20000000          // Bit clock swap
-#define I2S_TCR2_SYNC(n)      (uint32_t)((n & 3)<<30)       // 0=async 1=sync with receiver
-
-/* TCR3 bits */
-#define I2S_TCR3_WDFL(n)      ((uint32_t)(n & 0x0f))        // word flag configuration
-#define I2S_TCR3_TCE          (uint32_t)0x10000             // transmit channel enable
-
-/* TCR4 bits */
-#define I2S_TCR4_FSD          (uint32_t)0x1                 // Frame Sync Direction
-#define I2S_TCR4_FSP          (uint32_t)0x2                 // Frame Sync Polarity
-#define I2S_TCR4_FSE          (uint32_t)0x8                 // Frame Sync Early
-#define I2S_TCR4_MF           (uint32_t)0x10                // MSB First
-#define I2S_TCR4_SYWD(n)      (uint32_t)((n & 0x1f)<<8)     // Sync Width
-#define I2S_TCR4_FRSZ(n)      (uint32_t)((n & 0x0f)<<16)    // Frame Size
-
-/* TCR5 bits */
-#define I2S_TCR5_FBT(n)       (uint32_t)((n & 0x1f)<<8)     // First Bit Shifted
-#define I2S_TCR5_W0W(n)       (uint32_t)((n & 0x1f)<<16)    // Word 0 Width
-#define I2S_TCR5_WNW(n)       (uint32_t)((n & 0x1f)<<24)    // Word N Width
-
-/* TDR Bit Fields */
-#define I2S_TDR_TDR(n)        (uint32_t)(n)
-
-/* TFR Bit Fields */
-#define I2S_TFR_RFP(n)        (uint32_t)(n & 5)             // read FIFO pointer
-#define I2S_TFR_WFP(n)        (uint32_t)((n & 5)<<16)       // write FIFO pointer
-
-/* TMR Bit Fields */
-#define I2S_TMR_TWM(n)        (uint32_t)(n & 0xFFFFFFFF)
-
-// I2S0_MCR bits
-#define I2S_MCR_DUF           (uint32_t)(1<<31)             // Divider Update Flag
-#define I2S_MCR_MOE           (uint32_t)(1<<30)             // MCLK Output Enable
-#define I2S_MCR_MICS(n)       (uint32_t)((n & 3)<<24)       // MCLK Input Clock Select
-
-// I2S0_MDR bits
-#define I2S_MDR_FRACT(n)      (uint32_t)((n & 0xff)<<12)    // MCLK Fraction
-#define I2S_MDR_DIVIDE(n)     (uint32_t)((n & 0xfff))       // MCLK Divide
-
 /* ------ End Hardware ------------------------- */
 
 
@@ -255,9 +255,11 @@ extern "C" {
 #define DMA_BUFFER_SIZE 128
 
 // Clock types for i2s_switch_clock
-#define I2S_CLOCK_48K_INTERNAL 0
-#define I2S_CLOCK_44K_INTERNAL 1
-#define I2S_CLOCK_EXTERNAL     2
+#define I2S_CLOCK_EXTERNAL     0
+#define I2S_CLOCK_8K_INTERNAL  1
+#define I2S_CLOCK_32K_INTERNAL 2
+#define I2S_CLOCK_44K_INTERNAL 3
+#define I2S_CLOCK_48K_INTERNAL 4
 
 // Flags
 extern volatile int Playing_Buff_A;
