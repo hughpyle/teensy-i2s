@@ -20,7 +20,7 @@
 */
 
 
-const int isDMA = 0;
+const int isDMA = 1;
 const int codecIsMaster = 0;
 
 

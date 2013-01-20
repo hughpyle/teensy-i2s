@@ -28,8 +28,8 @@ extern "C" {
 #define I2S_TCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
 #define I2S_TCSR_FWIE                   (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
 #define I2S_TCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
-#define I2S_TCSR_FWDE                   (uint32_t)0x00000001    // FIFO Warning DMA Enable
-#define I2S_TCSR_FRDE                   (uint32_t)0x00000000    // FIFO Request DMA Enable
+#define I2S_TCSR_FWDE                   (uint32_t)0x00000002    // FIFO Warning DMA Enable
+#define I2S_TCSR_FRDE                   (uint32_t)0x00000001    // FIFO Request DMA Enable
 
 #define I2S_TCR1_TFW(n)                 (uint32_t)(n & 0x03)   // Transmit FIFO watermark
 
