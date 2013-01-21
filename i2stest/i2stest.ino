@@ -20,7 +20,7 @@
 */
 
 const int isDMA = 0;
-const int codecIsMaster = 0;
+const int codecIsMaster = 1;
 
 
 void setup()
@@ -71,7 +71,7 @@ void setup()
 // audio data
 q15_t audx = 0;
 q15_t audy = 0.9 * 32767;
-q15_t audd = 2.0 * sin(PI/100) * 32767;
+q15_t audd = 2.0 * sin(PI*440/48000) * 32767;
 q15_t audf = 1.0 * 32767;
 uint32_t a = 0;
 uint32_t b = 0;
@@ -79,6 +79,9 @@ uint32_t p = 0;
 uint32_t nnn=0;
 void initsinevalue()
 {
+  int   x = 45 + random(48);                             // midi note number
+  float f = (440.0 / 32) * pow(2, ((float)x - 9) / 12);  // Hz.  For realz, use a lookup table.
+  audd = 2.0 * sin(PI*f/48000) * 32767;                  // delta (q15_t)
   audx = 0;
   audy = 32767;
   a = __PKHBT( audf, audd, 16 );
@@ -143,7 +146,9 @@ void dma_fill( int16_t *pBuf, int16_t len )
   while( len>0 )
   {
     *pBuf++ = audx;
+    *pBuf++ = audx;
     nextsinevalue();
+    len--;
     len--;
   }
   Serial.println("fills");
@@ -193,8 +198,10 @@ void loop()
     delay(1000);
     dma_play();
     Serial.println( "DMA playing." );
-    es = DMA_ERR;
+    es = DMA_ES;
     if(es>0) Serial.println( es, DEC );  // DMA error status
+//    es = DMA_ERR;
+//     if(es>0) Serial.println( es, DEC );  // DMA error status
   
     delay(1000);
     dma_stop();
