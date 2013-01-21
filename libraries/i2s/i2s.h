@@ -10,6 +10,7 @@ extern "C" {
 /* ------ Move this stuff to mk20dx128.h ------- */
 
 /* I2S */
+/* Transmit Control Registers */
 
 /* I2Sx_TCSR bits */
 #define I2S_TCSR_TE                     (uint32_t)0x80000000    // Transmitter Enable
@@ -67,16 +68,7 @@ extern "C" {
 /* I2Sx_TMR bits */
 #define I2S_TMR_TWM(n)                  ((uint32_t)n & 0xFFFFFFFF)
 
-
-/* I2Sx_MCR bits */
-#define I2S_MCR_DUF                     ((uint32_t)1<<31)             // Divider Update Flag
-#define I2S_MCR_MOE                     ((uint32_t)1<<30)             // MCLK Output Enable
-#define I2S_MCR_MICS(n)                 ((uint32_t)(n & 3)<<24)       // MCLK Input Clock Select
-
-/* I2Sx_MDR bits */
-#define I2S_MDR_FRACT(n)                ((uint32_t)(n & 0xff)<<12)    // MCLK Fraction
-#define I2S_MDR_DIVIDE(n)               ((uint32_t)(n & 0xfff))       // MCLK Divide
-
+/* Receive Control Registers */
 
 /* I2Sx_RCSR bits */
 #define I2S_RCSR_RE                     (uint32_t)0x80000000    // Receiver Enable
@@ -97,6 +89,53 @@ extern "C" {
 #define I2S_RCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
 #define I2S_RCSR_FWDE                   (uint32_t)0x00000002    // FIFO Warning DMA Enable
 #define I2S_RCSR_FRDE                   (uint32_t)0x00000001    // FIFO Request DMA Enable
+
+/* I2Sx_RCR1 bits */
+#define I2S_RCR1_RFW(n)                 ((uint32_t)n & 0x03)          // Receive FIFO watermark
+
+/* I2Sx_RCR2 bits */
+#define I2S_RCR2_DIV(n)                 ((uint32_t)n & 0xff)          // Bit clock divide by (DIV+1)*2
+#define I2S_RCR2_BCD                    ((uint32_t)1<<24)             // Bit clock direction
+#define I2S_RCR2_BCP                    ((uint32_t)1<<25)             // Bit clock polarity
+#define I2S_RCR2_MSEL(n)                ((uint32_t)(n & 3)<<26)       // MCLK select, 0=bus clock, 1=I2S0_MCLK
+#define I2S_RCR2_BCI                    ((uint32_t)1<<28)             // Bit clock input
+#define I2S_RCR2_BCS                    ((uint32_t)1<<29)             // Bit clock swap
+#define I2S_RCR2_SYNC(n)                ((uint32_t)(n & 3)<<30)       // 0=async 1=sync with receiver
+
+/* I2Sx_RCR3 bits */
+#define I2S_RCR3_WDFL(n)                ((uint32_t)n & 0x0f)          // word flag configuration
+#define I2S_RCR3_RCE                    ((uint32_t)0x10000)           // receive channel enable
+
+/* I2Sx_RCR4 bits */
+#define I2S_RCR4_FSD                    ((uint32_t)1)                 // Frame Sync Direction
+#define I2S_RCR4_FSP                    ((uint32_t)2)                 // Frame Sync Polarity
+#define I2S_RCR4_FSE                    ((uint32_t)8)                 // Frame Sync Early
+#define I2S_RCR4_MF                     ((uint32_t)0x10)              // MSB First
+#define I2S_RCR4_SYWD(n)                ((uint32_t)(n & 0x1f)<<8)     // Sync Width
+#define I2S_RCR4_FRSZ(n)                ((uint32_t)(n & 0x0f)<<16)    // Frame Size
+
+/* I2Sx_RCR5 bits */
+#define I2S_RCR5_FBT(n)                 ((uint32_t)(n & 0x1f)<<8)     // First Bit Shifted
+#define I2S_RCR5_W0W(n)                 ((uint32_t)(n & 0x1f)<<16)    // Word 0 Width
+#define I2S_RCR5_WNW(n)                 ((uint32_t)(n & 0x1f)<<24)    // Word N Width
+
+/* I2Sx_RFRn bits */
+#define I2S_RFR_RFP(n)                  ((uint32_t)n & 7)             // read FIFO pointer
+#define I2S_RFR_WFP(n)                  ((uint32_t)(n & 7)<<16)       // write FIFO pointer
+
+/* I2Sx_RMR bits */
+#define I2S_RMR_RWM(n)                  ((uint32_t)n & 0xFFFFFFFF)
+
+/* MCLK Registers */
+
+/* I2Sx_MCR bits */
+#define I2S_MCR_DUF                     ((uint32_t)1<<31)             // Divider Update Flag
+#define I2S_MCR_MOE                     ((uint32_t)1<<30)             // MCLK Output Enable
+#define I2S_MCR_MICS(n)                 ((uint32_t)(n & 3)<<24)       // MCLK Input Clock Select
+
+/* I2Sx_MDR bits */
+#define I2S_MDR_FRACT(n)                ((uint32_t)(n & 0xff)<<12)    // MCLK Fraction
+#define I2S_MDR_DIVIDE(n)               ((uint32_t)(n & 0xfff))       // MCLK Divide
 
 
 /* DMA */
