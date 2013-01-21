@@ -71,13 +71,16 @@ void setup()
 // audio data
 q15_t audx = 0;
 q15_t audy = 0.9 * 32767;
-q15_t audd = 2.0 * sin(PI/200) * 32767;
+q15_t audd = 2.0 * sin(PI/100) * 32767;
 q15_t audf = 1.0 * 32767;
 uint32_t a = 0;
 uint32_t b = 0;
 uint32_t p = 0;
+uint32_t nnn=0;
 void initsinevalue()
 {
+  audx = 0;
+  audy = 32767;
   a = __PKHBT( audf, audd, 16 );
   b = __PKHBT( audx, audy, 16 );
 }
@@ -90,6 +93,8 @@ void nextsinevalue()
   p = __SMUSD(a,b)<<1;
   b = (b>>16) + (p & 0xFFFF0000);
   audx = (q15_t)(p & 0xFFFF);
+  nnn++;
+  if(nnn>48000) {nnn=0;initsinevalue();};
 }
 
 /* --------------------- Direct I2S data transfer, we get the FIFO callback ----- */
@@ -119,7 +124,7 @@ void i2s0_tx_isr(void)
 
   // Send two words of data (the FIFO buffer is just 2 words)
   I2S0_TDR0 = (uint32_t)b; //audx;
-  nextsinevalue();
+  //nextsinevalue();
   I2S0_TDR0 = (uint32_t)b; //audx;
   nextsinevalue();
 
