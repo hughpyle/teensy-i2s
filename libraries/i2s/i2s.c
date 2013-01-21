@@ -113,6 +113,7 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
             | I2S_TCR2_DIV(7)       // divide internal master clock to generate bit clock
             | I2S_TCR2_BCD          // bit clock direction: generated internally in Master mode
             | I2S_TCR2_MSEL(0)      // bus clock as source
+            | I2S_TCR2_BCP          // bit clock polarity
         ;
     }
 
