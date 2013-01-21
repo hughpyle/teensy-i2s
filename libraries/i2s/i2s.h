@@ -11,7 +11,7 @@ extern "C" {
 
 /* I2S */
 
-/* TCSR bits */
+/* I2Sx_TCSR bits */
 #define I2S_TCSR_TE                     (uint32_t)0x80000000    // Transmitter Enable
 #define I2S_TCSR_STOPE                  (uint32_t)0x40000000    // Transmitter Enable in Stop mode
 #define I2S_TCSR_DBGE                   (uint32_t)0x20000000    // Transmitter Enable in Debug mode
@@ -31,53 +31,72 @@ extern "C" {
 #define I2S_TCSR_FWDE                   (uint32_t)0x00000002    // FIFO Warning DMA Enable
 #define I2S_TCSR_FRDE                   (uint32_t)0x00000001    // FIFO Request DMA Enable
 
-#define I2S_TCR1_TFW(n)                 (uint32_t)(n & 0x03)   // Transmit FIFO watermark
+/* I2Sx_TCR1 bits */
+#define I2S_TCR1_TFW(n)                 ((uint32_t)n & 0x03)          // Transmit FIFO watermark
+
+/* I2Sx_TCR2 bits */
+#define I2S_TCR2_DIV(n)                 ((uint32_t)n & 0xff)          // Bit clock divide by (DIV+1)*2
+#define I2S_TCR2_BCD                    ((uint32_t)1<<24)             // Bit clock direction
+#define I2S_TCR2_BCP                    ((uint32_t)1<<25)             // Bit clock polarity
+#define I2S_TCR2_MSEL(n)                ((uint32_t)(n & 3)<<26)       // MCLK select, 0=bus clock, 1=I2S0_MCLK
+#define I2S_TCR2_BCI                    ((uint32_t)1<<28)             // Bit clock input
+#define I2S_TCR2_BCS                    ((uint32_t)1<<29)             // Bit clock swap
+#define I2S_TCR2_SYNC(n)                ((uint32_t)(n & 3)<<30)       // 0=async 1=sync with receiver
+
+/* I2Sx_TCR3 bits */
+#define I2S_TCR3_WDFL(n)                ((uint32_t)n & 0x0f)          // word flag configuration
+#define I2S_TCR3_TCE                    ((uint32_t)0x10000)           // transmit channel enable
+
+/* I2Sx_TCR4 bits */
+#define I2S_TCR4_FSD                    ((uint32_t)1)                 // Frame Sync Direction
+#define I2S_TCR4_FSP                    ((uint32_t)2)                 // Frame Sync Polarity
+#define I2S_TCR4_FSE                    ((uint32_t)8)                 // Frame Sync Early
+#define I2S_TCR4_MF                     ((uint32_t)0x10)              // MSB First
+#define I2S_TCR4_SYWD(n)                ((uint32_t)(n & 0x1f)<<8)     // Sync Width
+#define I2S_TCR4_FRSZ(n)                ((uint32_t)(n & 0x0f)<<16)    // Frame Size
+
+/* I2Sx_TCR5 bits */
+#define I2S_TCR5_FBT(n)                 ((uint32_t)(n & 0x1f)<<8)     // First Bit Shifted
+#define I2S_TCR5_W0W(n)                 ((uint32_t)(n & 0x1f)<<16)    // Word 0 Width
+#define I2S_TCR5_WNW(n)                 ((uint32_t)(n & 0x1f)<<24)    // Word N Width
+
+/* I2Sx_TFRn bits */
+#define I2S_TFR_RFP(n)                  ((uint32_t)n & 7)             // read FIFO pointer
+#define I2S_TFR_WFP(n)                  ((uint32_t)(n & 7)<<16)       // write FIFO pointer
+
+/* I2Sx_TMR bits */
+#define I2S_TMR_TWM(n)                  ((uint32_t)n & 0xFFFFFFFF)
 
 
-/* TCR2 bits */
-#define I2S_TCR2_DIV(n)       ((uint32_t)n & 0xff)          // Bit clock divide by (DIV+1)*2
-#define I2S_TCR2_BCD          ((uint32_t)0x1000000)         // Bit clock direction
-#define I2S_TCR2_BCP          ((uint32_t)0x2000000)         // Bit clock polarity
-#define I2S_TCR2_MSEL(n)      ((uint32_t)(n & 3)<<26)       // MCLK select, 0=bus clock, 1=I2S0_MCLK
-#define I2S_TCR2_BCI          ((uint32_t)0x10000000)        // Bit clock input
-#define I2S_TCR2_BCS          ((uint32_t)0x20000000)        // Bit clock swap
-#define I2S_TCR2_SYNC(n)      ((uint32_t)(n & 3)<<30)       // 0=async 1=sync with receiver
+/* I2Sx_MCR bits */
+#define I2S_MCR_DUF                     ((uint32_t)1<<31)             // Divider Update Flag
+#define I2S_MCR_MOE                     ((uint32_t)1<<30)             // MCLK Output Enable
+#define I2S_MCR_MICS(n)                 ((uint32_t)(n & 3)<<24)       // MCLK Input Clock Select
 
-/* TCR3 bits */
-#define I2S_TCR3_WDFL(n)      ((uint32_t)(n & 0x0f))        // word flag configuration
-#define I2S_TCR3_TCE          (uint32_t)0x10000             // transmit channel enable
+/* I2Sx_MDR bits */
+#define I2S_MDR_FRACT(n)                ((uint32_t)(n & 0xff)<<12)    // MCLK Fraction
+#define I2S_MDR_DIVIDE(n)               ((uint32_t)(n & 0xfff))       // MCLK Divide
 
-/* TCR4 bits */
-#define I2S_TCR4_FSD          (uint32_t)0x1                 // Frame Sync Direction
-#define I2S_TCR4_FSP          (uint32_t)0x2                 // Frame Sync Polarity
-#define I2S_TCR4_FSE          (uint32_t)0x8                 // Frame Sync Early
-#define I2S_TCR4_MF           (uint32_t)0x10                // MSB First
-#define I2S_TCR4_SYWD(n)      (uint32_t)((n & 0x1f)<<8)     // Sync Width
-#define I2S_TCR4_FRSZ(n)      (uint32_t)((n & 0x0f)<<16)    // Frame Size
 
-/* TCR5 bits */
-#define I2S_TCR5_FBT(n)       (uint32_t)((n & 0x1f)<<8)     // First Bit Shifted
-#define I2S_TCR5_W0W(n)       (uint32_t)((n & 0x1f)<<16)    // Word 0 Width
-#define I2S_TCR5_WNW(n)       (uint32_t)((n & 0x1f)<<24)    // Word N Width
-
-/* TDR Bit Fields */
-#define I2S_TDR_TDR(n)        (uint32_t)(n)
-
-/* TFR Bit Fields */
-#define I2S_TFR_RFP(n)        (uint32_t)(n & 5)             // read FIFO pointer
-#define I2S_TFR_WFP(n)        (uint32_t)((n & 5)<<16)       // write FIFO pointer
-
-/* TMR Bit Fields */
-#define I2S_TMR_TWM(n)        (uint32_t)(n & 0xFFFFFFFF)
-
-// I2S0_MCR bits
-#define I2S_MCR_DUF           (uint32_t)(1<<31)             // Divider Update Flag
-#define I2S_MCR_MOE           (uint32_t)(1<<30)             // MCLK Output Enable
-#define I2S_MCR_MICS(n)       (uint32_t)((n & 3)<<24)       // MCLK Input Clock Select
-
-// I2S0_MDR bits
-#define I2S_MDR_FRACT(n)      (uint32_t)((n & 0xff)<<12)    // MCLK Fraction
-#define I2S_MDR_DIVIDE(n)     (uint32_t)((n & 0xfff))       // MCLK Divide
+/* I2Sx_RCSR bits */
+#define I2S_RCSR_RE                     (uint32_t)0x80000000    // Receiver Enable
+#define I2S_RCSR_STOPE                  (uint32_t)0x40000000    // Receiver Enable in Stop mode
+#define I2S_RCSR_DBGE                   (uint32_t)0x20000000    // Receiver Enable in Debug mode
+#define I2S_RCSR_BCE                    (uint32_t)0x10000000    // Bit Clock Enable
+#define I2S_RCSR_FR                     (uint32_t)0x02000000    // FIFO Reset
+#define I2S_RCSR_SR                     (uint32_t)0x01000000    // Software Reset
+#define I2S_RCSR_WSF                    (uint32_t)0x00100000    // Word Start Flag
+#define I2S_RCSR_SEF                    (uint32_t)0x00080000    // Sync Error Flag
+#define I2S_RCSR_FEF                    (uint32_t)0x00040000    // FIFO Error Flag (underrun)
+#define I2S_RCSR_FWF                    (uint32_t)0x00020000    // FIFO Warning Flag (empty)
+#define I2S_RCSR_FRF                    (uint32_t)0x00010000    // FIFO Request Flag (Data Ready)
+#define I2S_RCSR_WSIE                   (uint32_t)0x00001000    // Word Start Interrupt Enable
+#define I2S_RCSR_SEIE                   (uint32_t)0x00000800    // Sync Error Interrupt Enable
+#define I2S_RCSR_FEIE                   (uint32_t)0x00000400    // FIFO Error Interrupt Enable
+#define I2S_RCSR_FWIE                   (uint32_t)0x00000200    // FIFO Warning Interrupt Enable
+#define I2S_RCSR_FRIE                   (uint32_t)0x00000100    // FIFO Request Interrupt Enable
+#define I2S_RCSR_FWDE                   (uint32_t)0x00000002    // FIFO Warning DMA Enable
+#define I2S_RCSR_FRDE                   (uint32_t)0x00000001    // FIFO Request DMA Enable
 
 
 /* DMA */
@@ -95,10 +114,10 @@ extern "C" {
 /* ES - Error Status */
 
 /* ERQ - Enable Request Register */
-#define DMA_ERQ_ERQ0                    ((uint32_t)1<<0)         // Enable DMA Request 0
-#define DMA_ERQ_ERQ1                    ((uint32_t)1<<1)         // Enable DMA Request 1
-#define DMA_ERQ_ERQ2                    ((uint32_t)1<<2)         // Enable DMA Request 2
-#define DMA_ERQ_ERQ3                    ((uint32_t)1<<3)         // Enable DMA Request 3
+#define DMA_ERQ_ERQ0                    ((uint32_t)1<<0)        // Enable DMA Request 0
+#define DMA_ERQ_ERQ1                    ((uint32_t)1<<1)        // Enable DMA Request 1
+#define DMA_ERQ_ERQ2                    ((uint32_t)1<<2)        // Enable DMA Request 2
+#define DMA_ERQ_ERQ3                    ((uint32_t)1<<3)        // Enable DMA Request 3
 
 /* EEI - Enable Error Interrupt Register */
 #define DMA_EEI_EEI0                    ((uint32_t)1<<0)        // Enable Error Interrupt 0

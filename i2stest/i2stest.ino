@@ -19,16 +19,16 @@
   MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) // 22
 */
 
-
-const int isDMA = 1;
-const int codecIsMaster = 0;
+const int isDMA = 0;
+const int codecIsMaster = 1;
 
 
 void setup()
 {
+  initsinevalue(); 
   Serial.println( "Initializing" );
   
-  delay(2000);  
+  delay(2000); 
   Serial.println( "Initializing." );
 
   delay(1000);
@@ -36,20 +36,10 @@ void setup()
   if( codecIsMaster )
   {
     interface |= WM8731_INTERFACE_MASTER;
-  }
-  
-  if( codecIsMaster )
-  {
-    // 48k
-    WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
-  }
-  else
-  {
-    // 8k
-    WM8731.begin( low, WM8731_SAMPLING_RATE(hz8000), interface );
-  }
-
+  }  
+  WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
   WM8731.setActive();
+  WM8731.setOutputVolume( 255 );
   Serial.println( "Initialized I2C" );
   
   delay(1000);
@@ -63,7 +53,7 @@ void setup()
   {
     // Internal clock, directly writing to the i2s FIFO
     Serial.println( "Initializing for internal clock" );
-    Serial.println( i2s_init(I2S_CLOCK_8K_INTERNAL, isDMA), DEC );  
+    Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL, isDMA), DEC );  
   }
   Serial.println( "Initialized I2S." );  
 
@@ -77,9 +67,30 @@ void setup()
 
 
 
-// Bit pattern for testing
-uint16_t naud=0xACCF;
 
+// audio data
+q15_t audx = 0;
+q15_t audy = 0.9 * 32767;
+q15_t audd = 2.0 * sin(PI/200) * 32767;
+q15_t audf = 1.0 * 32767;
+uint32_t a = 0;
+uint32_t b = 0;
+uint32_t p = 0;
+void initsinevalue()
+{
+  a = __PKHBT( audf, audd, 16 );
+  b = __PKHBT( audx, audy, 16 );
+}
+void nextsinevalue() 
+{
+  // b = 0xACCF0010; audx=0xACCF; return;
+  //  http://cabezal.com/misc/minsky-circles.html
+  p = __SMUAD(a,b)<<1;
+  b = (b>>16) + (p & 0xFFFF0000);
+  p = __SMUSD(a,b)<<1;
+  b = (b>>16) + (p & 0xFFFF0000);
+  audx = (q15_t)(p & 0xFFFF);
+}
 
 /* --------------------- Direct I2S data transfer, we get the FIFO callback ----- */
 
@@ -99,15 +110,21 @@ transmit FIFO watermark configuration.
 int8_t ever_called_tx = 0;
 void i2s0_tx_isr(void)
 {
-//  Serial.println( I2S0_TCSR, DEC );
-  // Fill dat buff
-  while( (I2S0_TCSR & I2S_TCSR_FRF)==0 )
-  {
-    I2S0_TDR0 = (uint32_t)naud;
-    naud = !naud;
-  }
-}
+  // Clear the FIFO error flag
+  if(I2S0_TCSR & I2S_TCSR_FEF)  // underrun
+     I2S0_TCSR |= I2S_TCSR_FEF; // clear
 
+  if(I2S0_TCSR & I2S_TCSR_SEF)  // frame sync error
+     I2S0_TCSR |= I2S_TCSR_SEF; // clear
+
+  // Send two words of data (the FIFO buffer is just 2 words)
+  I2S0_TDR0 = (uint32_t)b; //audx;
+  nextsinevalue();
+  I2S0_TDR0 = (uint32_t)b; //audx;
+  nextsinevalue();
+
+//  Serial.println( I2S0_TCSR, HEX );  
+}
 
 
 
@@ -120,7 +137,8 @@ void dma_fill( int16_t *pBuf, int16_t len )
 {
   while( len>0 )
   {
-    *pBuf++ = 0;
+    *pBuf++ = audx;
+    nextsinevalue();
     len--;
   }
   Serial.println("fills");
@@ -153,6 +171,7 @@ void dma_ch0_isr(void)
   //_event_set(event_dma_rdy,0x01);
   dma_fill( pBuf, DMA_BUFFER_SIZE );
 }
+
 
 
 

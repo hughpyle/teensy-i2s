@@ -20,11 +20,10 @@ void i2s_io_init(void)
     PORTC_PCR3  |= PORT_PCR_MUX(0x06);
 
     // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) -- data
-    //PORTA_PCR12 &= PORT_PCR_MUX_MASK;
-    //PORTA_PCR12 |= PORT_PCR_MUX(0x06);
-    //CORE_PIN3_CONFIG = PORT_PCR_MUX(6)|PORT_PCR_SRE;//|PORT_PCR_ODE;
+//    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
+//    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
     
-    // MOSI -> Teensy 22 (ALT6 I2S0_TXD0) (PTC1) -- data
+    // MOSI -> Teensy 22 (ALT6 I2S0_TXD0) (PTC1) -- data, alternate output if you don't want to use pin 3
     PORTC_PCR1  &= PORT_PCR_MUX_MASK;
     PORTC_PCR1  |= PORT_PCR_MUX(0x06);
     
@@ -51,14 +50,14 @@ void i2s_switch_clock(unsigned char clk)
     if(clk==I2S_CLOCK_EXTERNAL)
     {
         // Select input clock 0
-        I2S0_MCR |= I2S_MCR_MICS(0);
-        // Configure to input the bit-clock from pin
-        I2S0_MCR &= ~(I2S_MCR_MOE);
+        // Configure to input the bit-clock from pin, bypasses the MCLK divider
+        I2S0_MCR = I2S_MCR_MICS(0);
+        I2S0_MDR = 0;
     }
     else
     {
         // Select input clock 0 and output enable
-        I2S0_MCR |= I2S_MCR_MICS(0) | I2S_MCR_MOE;
+        I2S0_MCR = I2S_MCR_MICS(0) | I2S_MCR_MOE;
         
         // 8k, 12k, 16k, 32k, etc all clock the I2S module at 12.288 MHz
         // 11025Hz, 22050, 44100 clock the I2S module at 11.2896 MHz
@@ -92,6 +91,7 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
  
     // transmit disable
     I2S0_TCSR &= ~(I2S_TCSR_TE);
+    I2S0_RCSR &= ~(I2S_RCSR_RE);
     I2S0_TCR3 = 0;
     
     // Transmitter remains enabled until (and TE set) the end of the current frame
@@ -104,16 +104,15 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
     {
         I2S0_TCR2 =
               I2S_TCR2_SYNC(0)   // asynchronous mode
-            | I2S_TCR2_BCI        // external bit clock
         ;
     }
     else
     {
         I2S0_TCR2 =
               I2S_TCR2_SYNC(0)      // asynchronous mode
-            | I2S_TCR2_DIV(15)      // divide internal master clock to generate bit clock
+            | I2S_TCR2_DIV(7)       // divide internal master clock to generate bit clock
             | I2S_TCR2_BCD          // bit clock direction: generated internally in Master mode
-            | I2S_TCR2_MSEL(0)      // I2S0_MCLK as source
+            | I2S_TCR2_MSEL(0)      // bus clock as source
         ;
     }
 
@@ -127,7 +126,7 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
     {
         I2S0_TCR4 =
             I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(15)   // length of frame sync in bit clocks (15 plus one)
+          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (15 plus one)
           | I2S_TCR4_MF         // MSB first
           ;
     }
@@ -135,7 +134,7 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
     {
         I2S0_TCR4 =
             I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(15)   // length of frame sync in bit clocks (15 plus one) => word clock with 50/50 duty cycle
+          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (15 plus one) => word clock with 50/50 duty cycle
           | I2S_TCR4_MF         // MSB first
           | I2S_TCR4_FSD        // Frame sync is generated internally (master)
           | I2S_TCR4_FSE        // Frame sync one bit before the frame
@@ -143,9 +142,9 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
     }
     
     I2S0_TCR5 =
-        I2S_TCR5_WNW(15)        // 16 bits per word excxept for first frame
-      | I2S_TCR5_W0W(15)        // 16 bits per word there too
-      | I2S_TCR5_FBT(0x1f)         // first Bit Shifted = 0, so data is aligned to the MSB of the FIFO register
+        I2S_TCR5_WNW(31)        // 32 bits per word except for first frame
+      | I2S_TCR5_W0W(31)        // 32 bits per word there too
+      | I2S_TCR5_FBT(0x1f)      // first Bit Shifted = 31, so data is aligned to the MSB of the FIFO register
       ;
 
 
@@ -156,6 +155,10 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
                    | I2S_TCSR_BCE           // Bit Clock Enable
                    | I2S_TCSR_FRDE          // FIFO Request DMA Enable
                    ;
+        // Receive enable
+        I2S0_RCSR |= I2S_RCSR_RE            // Transmit Enable
+                   | I2S_RCSR_BCE           // Bit Clock Enable
+                   ;
     }
     else
     {
@@ -164,6 +167,10 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
         I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
                    | I2S_TCSR_BCE           // Bit Clock Enable
                    | I2S_TCSR_FRIE          // FIFO Request Interrupt Enable
+                   ;
+        // Receive enable
+        I2S0_RCSR |= I2S_RCSR_RE            // Transmit Enable
+                   | I2S_RCSR_BCE           // Bit Clock Enable
                    ;
     }
 
