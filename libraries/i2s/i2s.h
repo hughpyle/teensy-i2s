@@ -332,7 +332,8 @@ extern int16_t Audio_Source_Blk_A[DMA_BUFFER_SIZE], Audio_Source_Blk_B[DMA_BUFFE
  
 void i2s_io_init(void);
 void i2s_switch_clock(unsigned char clk);
-int i2s_init(unsigned char clk, unsigned char useDMA);
+int i2s_init(unsigned char clk);
+void i2s_start(unsigned char useDMA);
 
 /*
  * DMA for the I2S interface
@@ -342,7 +343,7 @@ void dma_init(void);
 void dma_play(void);
 void dma_stop(void);
 
-extern void dma_fill( int16_t *pBuf, int16_t len );
+extern void dma_fill( int isA, int16_t *pBuf, int16_t len );
 
 
 #ifdef __cplusplus

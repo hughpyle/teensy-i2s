@@ -6,9 +6,14 @@
 
 // Timings assume 96MHz system clock (overclocked Teensy 3.0)
 
-// If using DMA, caller must implement dma_ch0_isr()
+// If using DMA, caller must implement dma_fill()
 // If not using DMA, caller must implement i2s0_tx_isr().
  
+
+ // Use round-robin DMA channel priorities?  If not, they're explicitly set
+#define ROUNDROBIN
+
+
 
 void i2s_io_init(void)
 {
@@ -83,7 +88,7 @@ void i2s_switch_clock(unsigned char clk)
 
 
 
-int i2s_init(unsigned char clk, unsigned char useDMA)
+int i2s_init(unsigned char clk)
 {
     int i;
     i2s_io_init();
@@ -148,7 +153,12 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
       | I2S_TCR5_FBT(0x1f)      // first Bit Shifted = 31, so data is aligned to the MSB of the FIFO register
       ;
 
+    return 0;
+}
 
+
+void i2s_start(unsigned char useDMA)
+{
     if( useDMA )
     {
         // Transmit enable.  When FIFO needs data it generates a DMA request.
@@ -174,8 +184,6 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
                    | I2S_RCSR_BCE           // Bit Clock Enable
                    ;
     }
-
-    return 0;
 }
 
 
@@ -185,7 +193,8 @@ int i2s_init(unsigned char clk, unsigned char useDMA)
  */
  
 // 16 bit audio samples - not volatile because only read by interrupts/hw
-int16_t Audio_Source_Blk_A[DMA_BUFFER_SIZE], Audio_Source_Blk_B[DMA_BUFFER_SIZE];
+int16_t Audio_Source_Blk_A[DMA_BUFFER_SIZE];
+int16_t Audio_Source_Blk_B[DMA_BUFFER_SIZE];
 
 // to be used during mute 
 int16_t Audio_Silence[DMA_BUFFER_SIZE];                                        
@@ -202,24 +211,25 @@ void clearAudioBuffers(void)
     p3 = Audio_Silence;
     for (i=0 ; i < DMA_BUFFER_SIZE; i++) 
     {
-        *p1++ = i+0;   // mute initially
-        *p2++ = i+0;   // mute initially
-        *p3++ = i+0;   // mute forever
+        *p1++ = 0;   // mute initially
+        *p2++ = 0;   // mute initially
+        *p3++ = 0;   // mute forever
     }  
 }
 
 
-#define LOOP2
+#define LOOP1
 
 void dma_transmit_init(void)  
 {
     // Enable clock to the DMAMUX module
     SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+    // And clock to the DMA module
+    SIM_SCGC7 |= SIM_SCGC7_DMA;
     
     // configure DMA_MUX
     DMAMUX0_CHCFG0 = 0;
     DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(DMAMUX_SOURCE_I2S0_TX);
-    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
 
     // Enable IRQ on the DMA channel 0
     // NVIC_ENABLE_IRQ(IRQ_DMA_ERROR);
@@ -228,17 +238,22 @@ void dma_transmit_init(void)
     // Set inactive
     DMA_TCD0_CSR &= ~(DMA_CSR_ACTIVE);
     
+#ifndef ROUNDROBIN
     // Set channel priorities (each must be unique)
     DMA_DCHPRI3 = 0;
     DMA_DCHPRI2 = 1;
     DMA_DCHPRI1 = 2;
     DMA_DCHPRI0 = 3;  // cannot be pre-empted, can pre-empt, highest priority
+#endif
 
 #ifdef LOOP1
     // Control register
     DMA_CR = 0              // Normal
 //      | DMA_CR_EDBG_MASK  // Stall DMA transfers when debugger is halted (avoid noise)
 //      | DMA_CR_EMLM_MASK  // minor looping
+#ifdef ROUNDROBIN
+        | DMA_CR_ERCA
+#endif
         ;
    
     // fill the TCD regs
@@ -261,6 +276,9 @@ void dma_transmit_init(void)
 #ifdef LOOP2
     // Control register
     DMA_CR = DMA_CR_EMLM  // minor looping
+#ifdef ROUNDROBIN
+        | DMA_CR_ERCA
+#endif
         ;
    
     // fill the TCD regs
@@ -281,9 +299,12 @@ void dma_transmit_init(void)
 #endif
 
     // enable DMA channel 0 requests
-    //DMA_ERQ = DMA_ERQ_ERQ0;
+    DMA_ERQ = DMA_ERQ_ERQ0;
     DMA_SERQ = DMA_SERQ_SERQ(0);
-  
+
+    // enable DMAMIX
+    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
+
     // Set active
     DMA_TCD0_CSR |= DMA_CSR_ACTIVE;
 
@@ -293,66 +314,52 @@ void dma_transmit_init(void)
 
 
 
-/*
-void hal_dma_init_for_i2s(uint buf_rx, uint buf_tx, uint block_n_sample, uint sample_n_byte)
-{
-    uint size_bit;
-    DMA_TCD tcd;    
-    switch(sample_n_byte)
-    {
-        case 1: size_bit = DMA_SIZE_8_BIT; break;
-        case 2: size_bit = DMA_SIZE_16_BIT; break;
-        case 4: size_bit = DMA_SIZE_32_BIT; break;
-        default: size_bit = DMA_SIZE_32_BIT; break;
-    }
-    
-    SIM_SCGC6 |= SIM_SCGC6_DMAMUX_MASK;
-    DMAMUX_CHCFG0 = DMAMUX_CHCFG_ENBL_MASK | DMAMUX_CHCFG_SOURCE(DMA_SRC_I2S_T);
-    
-    DMA_CR |= DMA_CR_EMLM_MASK;
-    DMA_CSR(0) = DMA_CSR_INTHALF_MASK | DMA_CSR_INTMAJOR_MASK;
-    nvic_enable_irq(IRQ_DMA0);
-    
-    tcd.channel = 0;
-    tcd.nbytes = DMA_NBYTES_MLOFFYES_SMLOE_MASK |
-                 DMA_NBYTES_MLOFFYES_MLOFF(sample_n_byte - block_n_sample*2*sample_n_byte*2)|
-                 DMA_NBYTES_MLOFFYES_NBYTES(sample_n_byte*2);
-    tcd.attr = DMA_ATTR_SSIZE(size_bit) | DMA_ATTR_DSIZE(size_bit);
-    tcd.saddr = buf_tx;
-    tcd.soff = block_n_sample*2*sample_n_byte;
-    tcd.slast = -(block_n_sample*2*sample_n_byte*3 - sample_n_byte);
-    tcd.daddr = (uint)(&I2S0_TX0);
-    tcd.doff = 0;
-    tcd.dlast_sga = 0;
-    tcd.citer = block_n_sample*2;
-    tcd.biter = block_n_sample*2;
-    _dma_init(&tcd);
-    
-    // enable DMA channel
-    DMA_SERQ = DMA_SERQ_SERQ(0);
-}
-*/
-
-
-
 
 void dma_init(void)  
 {
     clearAudioBuffers();
-    dma_transmit_init();
     Playing_Buff_A = 1;
+    dma_transmit_init();
 }
 
 void dma_play(void) 
 {
-    clearAudioBuffers();
-    DMA_ERQ |= DMA_ERQ_ERQ0;  
+    //clearAudioBuffers();
+    DMA_SERQ = DMA_SERQ_SERQ(0);
 }
 
 void dma_stop(void) 
 {
-    DMA_TCD0_SADDR = (uint32_t) Audio_Silence; // silence feed for DMA0
-    clearAudioBuffers();
-    DMA_ERQ &= ~DMA_ERQ_ERQ0;
+    //DMA_TCD0_SADDR = (uint32_t) Audio_Silence; // silence feed for DMA0
+    //clearAudioBuffers();
+    DMA_CERQ = DMA_CERQ_CERQ(0);
 }
+
+
+
+/* DMA ISR */
+void dma_ch0_isr(void)
+{
+  int16_t *pBuf;
+ 
+  DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
+    
+  if (Playing_Buff_A)
+  {                        // finished playing buffer A
+    Playing_Buff_A = 0;
+    DMA_TCD0_SADDR = (uint32_t)Audio_Source_Blk_B;
+    pBuf = (int16_t *)Audio_Source_Blk_A;
+  }
+  else
+  {
+    Playing_Buff_A = 1;
+    DMA_TCD0_SADDR = (uint32_t)Audio_Source_Blk_A;
+    pBuf = (int16_t *)Audio_Source_Blk_B;
+  } 
+   
+  // DMA finished playback an ready for a new buffer
+  //_event_set(event_dma_rdy,0x01);
+  dma_fill( Playing_Buff_A, pBuf, DMA_BUFFER_SIZE );
+}
+
 

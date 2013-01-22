@@ -47,13 +47,13 @@ void setup()
   {
     // External clock, 48k sample rate
     Serial.println( "Initializing for external clock" );
-    Serial.println( i2s_init(I2S_CLOCK_EXTERNAL, isDMA), DEC );  
+    Serial.println( i2s_init(I2S_CLOCK_EXTERNAL), DEC );
   }
   else
   {
     // Internal clock, directly writing to the i2s FIFO
     Serial.println( "Initializing for internal clock" );
-    Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL, isDMA), DEC );  
+    Serial.println( i2s_init(I2S_CLOCK_48K_INTERNAL), DEC );  
   }
   Serial.println( "Initialized I2S." );  
 
@@ -63,9 +63,8 @@ void setup()
     dma_init();
     Serial.println( "Initialized DMA." );  
   }
+  i2s_start(isDMA);
 }
-
-
 
 
 // audio data
@@ -141,8 +140,17 @@ void i2s0_tx_isr(void)
 /* ----------------------- DMA transfer ------------------------- */
 
 
-void dma_fill( int16_t *pBuf, int16_t len )
+void dma_fill( int isA, int16_t *pBuf, int16_t len )
 {
+  uint32_t es;
+
+//Serial.println(isA);
+
+  es = DMA_ES;
+  if(es>0) Serial.println( String("ES:") + es );  // DMA error status
+  es = DMA_ERR;
+  if(es>0) Serial.println( String("ERR:") + es );  // DMA error status
+
   while( len>0 )
   {
     *pBuf++ = audx;
@@ -151,35 +159,7 @@ void dma_fill( int16_t *pBuf, int16_t len )
     len--;
     len--;
   }
-  Serial.println("fills");
-}
-
-
-//extern pointer  event_dma_rdy;
-void dma_ch0_isr(void)
-{
-  int16_t *pBuf;
- 
-  DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
-
-  Serial.println("ISR");
-    
-  if (Playing_Buff_A)
-  {                        // finished playing buffer A
-    Playing_Buff_A = 0;
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_B;
-    pBuf = (int16_t *)Audio_Source_Blk_A;
-  }
-  else
-  {
-    Playing_Buff_A = 1;
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A;
-    pBuf = (int16_t *)Audio_Source_Blk_B;
-  } 
-   
-  // DMA finished playback an ready for a new buffer
-  //_event_set(event_dma_rdy,0x01);
-  dma_fill( pBuf, DMA_BUFFER_SIZE );
+  // Serial.println("fills");
 }
 
 
@@ -190,20 +170,18 @@ void loop()
 {
   uint32_t es;
   
-  delay(1000);
-  Serial.println( "Waiting." );  
-  
   if( isDMA )
   {
-    delay(1000);
+    delay(5000);
     dma_play();
     Serial.println( "DMA playing." );
+    
     es = DMA_ES;
-    if(es>0) Serial.println( es, DEC );  // DMA error status
-//    es = DMA_ERR;
-//     if(es>0) Serial.println( es, DEC );  // DMA error status
+    if(es>0) Serial.println( String("ES:") + es );  // DMA error status
+    es = DMA_ERR;
+    if(es>0) Serial.println( String("ERR:") + es );  // DMA error status
   
-    delay(1000);
+    delay(5000);
     dma_stop();
     Serial.println( "DMA stopped." );  
   }
@@ -215,43 +193,6 @@ void loop()
   }
 }
 
-
-/*
-// DMA ping-pong ISR
-
-void hal_fill_tx_buf(s32 *p_r, s32 *p_l, uint buf_n_sample)
-{
-    static int index = 0;
-    static int data_index = 0;
-    int i;
-    s32 *p_r_tx;
-    s32 *p_l_tx;
-
-    // get buffer pointer
-    if(index == 0)
-    {
-      p_r_tx = (int*)i2s_buf.buf_i2s_r_tx;
-      p_l_tx = (int*)i2s_buf.buf_i2s_l_tx;
-    }
-    else
-    {
-      p_r_tx = (int*)(i2s_buf.buf_i2s_r_tx+I2S_BLOCK_N_SAMPLES*I2S_SAMPLE_N_BYTE);
-      p_l_tx = (int*)(i2s_buf.buf_i2s_l_tx+I2S_BLOCK_N_SAMPLES*I2S_SAMPLE_N_BYTE);
-    }
-
-    // set content in the buffer
-    for( i=0; i<I2S_BLOCK_N_SAMPLES; i++ )
-    {
-      *p_r_tx++ = p_r[data_index];
-      *p_l_tx++ = p_l[data_index];
-      data_index++;
-      if(data_index >= buf_n_sample)
-        data_index = 0;
-    }
-    index ^= 1;
-}
-
-*/
 
 void dma_error_isr(void)
 {
