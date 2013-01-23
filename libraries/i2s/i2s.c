@@ -10,7 +10,7 @@
 // If not using DMA, caller must implement i2s0_tx_isr().
  
 
- // Use round-robin DMA channel priorities?  If not, they're explicitly set
+// Use round-robin DMA channel priorities?  If not, they're explicitly set
 #define ROUNDROBIN
 
 
@@ -25,12 +25,12 @@ void i2s_io_init(void)
     PORTC_PCR3  |= PORT_PCR_MUX(0x06);
 
     // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) -- data
-//    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
-//    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
+    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
+    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
     
     // MOSI -> Teensy 22 (ALT6 I2S0_TXD0) (PTC1) -- data, alternate output if you don't want to use pin 3
-    PORTC_PCR1  &= PORT_PCR_MUX_MASK;
-    PORTC_PCR1  |= PORT_PCR_MUX(0x06);
+//    PORTC_PCR1  &= PORT_PCR_MUX_MASK;
+//    PORTC_PCR1  |= PORT_PCR_MUX(0x06);
     
     // DACL -> Teensy 4 (ALT6 I2S0_TX_FS) (PTA13) -- word clock
     PORTA_PCR13 &= PORT_PCR_MUX_MASK;
@@ -109,6 +109,7 @@ int i2s_init(unsigned char clk)
     {
         I2S0_TCR2 =
               I2S_TCR2_SYNC(0)   // asynchronous mode
+            | I2S_TCR2_BCP          // bit clock polarity: active low
         ;
     }
     else
@@ -128,19 +129,21 @@ int i2s_init(unsigned char clk)
         I2S_TCR3_TCE;       // transmit data channel is enabled
                             // First word sets the word flag
         
+    // Always describe the frames as 32-bit even when the codec is only using 16 significant bits of data
     if(clk==I2S_CLOCK_EXTERNAL)
     {
         I2S0_TCR4 =
-            I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (15 plus one)
+            I2S_TCR4_FRSZ(1)    // frame size 2 words (plus one)
+          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (plus one)
           | I2S_TCR4_MF         // MSB first
+          | I2S_TCR4_FSE        // Frame sync one bit before the frame
           ;
     }
     else
     {
         I2S0_TCR4 =
             I2S_TCR4_FRSZ(1)    // frame size 2 words (1 plus one)
-          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (15 plus one) => word clock with 50/50 duty cycle
+          | I2S_TCR4_SYWD(31)   // length of frame sync in bit clocks (plus one) => word clock with 50/50 duty cycle
           | I2S_TCR4_MF         // MSB first
           | I2S_TCR4_FSD        // Frame sync is generated internally (master)
           | I2S_TCR4_FSE        // Frame sync one bit before the frame
@@ -150,7 +153,7 @@ int i2s_init(unsigned char clk)
     I2S0_TCR5 =
         I2S_TCR5_WNW(31)        // 32 bits per word except for first frame
       | I2S_TCR5_W0W(31)        // 32 bits per word there too
-      | I2S_TCR5_FBT(0x1f)      // first Bit Shifted = 31, so data is aligned to the MSB of the FIFO register
+      | I2S_TCR5_FBT(0x0f)      // first Bit Shifted = 31, so data is aligned to the MSB of the FIFO register
       ;
 
     return 0;
@@ -193,22 +196,22 @@ void i2s_start(unsigned char useDMA)
  */
  
 // 16 bit audio samples - not volatile because only read by interrupts/hw
-int16_t Audio_Source_Blk_A[DMA_BUFFER_SIZE];
-int16_t Audio_Source_Blk_B[DMA_BUFFER_SIZE];
+int16_t _dma_Buffer_A[DMA_BUFFER_SIZE];
+int16_t _dma_Buffer_B[DMA_BUFFER_SIZE];
 
 // to be used during mute 
-int16_t Audio_Silence[DMA_BUFFER_SIZE];                                        
+int16_t _dma_Buffer_S[DMA_BUFFER_SIZE];                                        
     
-volatile int Playing_Buff_A; 
+volatile int _dma_Playing_Buffer_A; 
 
 
 void clearAudioBuffers(void)
 {
     int i;
     int16_t *p1,*p2,*p3;
-    p1 = Audio_Source_Blk_A;
-    p2 = Audio_Source_Blk_B;
-    p3 = Audio_Silence;
+    p1 = _dma_Buffer_A;
+    p2 = _dma_Buffer_B;
+    p3 = _dma_Buffer_S;
     for (i=0 ; i < DMA_BUFFER_SIZE; i++) 
     {
         *p1++ = 0;   // mute initially
@@ -250,27 +253,28 @@ void dma_transmit_init(void)
     // Control register
     DMA_CR = 0              // Normal
 //      | DMA_CR_EDBG_MASK  // Stall DMA transfers when debugger is halted (avoid noise)
-//      | DMA_CR_EMLM_MASK  // minor looping
+      | DMA_CR_EMLM  // Enable minor looping
 #ifdef ROUNDROBIN
         | DMA_CR_ERCA
 #endif
         ;
    
     // fill the TCD regs
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ;       // alternated with Audio_Source_Blk_B by our interrupt handler
+    DMA_TCD0_SADDR          = (uint32_t) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
     DMA_TCD0_SOFF           = 2;                                    // 2 byte offset 
-    DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)
-                            | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
-                            | DMA_ATTR_DMOD(0)
-                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Transfer one word at a time
-    DMA_TCD0_NBYTES_MLNO    = 2;                                    // one  16bit sample every minor loop
+    DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)                      // No source modulo
+                            | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)   // Source data 16 bit
+                            | DMA_ATTR_DMOD(0)                      // No destination modulo
+                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Destination 16 bit
+    DMA_TCD0_NBYTES_MLNO    = 2;                                    // Transfer two bytes in each service request
     DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // source address will always be newly written before each new start
     DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
-    DMA_TCD0_DOFF           = 0;                                    // Zero offset
-    DMA_TCD0_DLASTSGA       = 0;                                    // no scatter/gather
-    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // total samples (128)
-    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // no chan links, total samples (128)
-    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR;                     // interrupt on major loop completion
+    DMA_TCD0_DOFF           = 0;                                    // No destination offset after each write
+    DMA_TCD0_DLASTSGA       = 0;                                    // No scatter/gather
+    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // major loop iteration count = total samples (128)
+    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // major loop iteration count = total samples (128), no channel links
+    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR                      // interrupt on major loop completion
+                            | DMA_CSR_BWC(3);                       // DMA bandwidth control
 #endif
 
 #ifdef LOOP2
@@ -287,7 +291,7 @@ void dma_transmit_init(void)
                             | DMA_NBYTES_MLOFFYES_NBYTES(2*2);
     DMA_TCD0_ATTR           = DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
                             | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Transfer one word at a time, no modulo
-    DMA_TCD0_SADDR          = (uint32_t) Audio_Source_Blk_A ;       // alternated with Audio_Source_Blk_B by our interrupt handler
+    DMA_TCD0_SADDR          = (uint32_t) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
     DMA_TCD0_SOFF           = DMA_BUFFER_SIZE*2*2;
     DMA_TCD0_SLAST          = -(DMA_BUFFER_SIZE*2*2*3 - 2);0;
     DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
@@ -318,7 +322,7 @@ void dma_transmit_init(void)
 void dma_init(void)  
 {
     clearAudioBuffers();
-    Playing_Buff_A = 1;
+    _dma_Playing_Buffer_A = 1;
     dma_transmit_init();
 }
 
@@ -330,7 +334,7 @@ void dma_play(void)
 
 void dma_stop(void) 
 {
-    //DMA_TCD0_SADDR = (uint32_t) Audio_Silence; // silence feed for DMA0
+    //DMA_TCD0_SADDR = (uint32_t) _dma_Buffer_S; // silence feed for DMA0
     //clearAudioBuffers();
     DMA_CERQ = DMA_CERQ_CERQ(0);
 }
@@ -344,22 +348,21 @@ void dma_ch0_isr(void)
  
   DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
     
-  if (Playing_Buff_A)
+  if (_dma_Playing_Buffer_A)
   {                        // finished playing buffer A
-    Playing_Buff_A = 0;
-    DMA_TCD0_SADDR = (uint32_t)Audio_Source_Blk_B;
-    pBuf = (int16_t *)Audio_Source_Blk_A;
+    _dma_Playing_Buffer_A = 0;
+    DMA_TCD0_SADDR = (uint32_t)_dma_Buffer_B;
+    pBuf = (int16_t *)_dma_Buffer_A;
   }
   else
   {
-    Playing_Buff_A = 1;
-    DMA_TCD0_SADDR = (uint32_t)Audio_Source_Blk_A;
-    pBuf = (int16_t *)Audio_Source_Blk_B;
+    _dma_Playing_Buffer_A = 1;
+    DMA_TCD0_SADDR = (uint32_t)_dma_Buffer_A;
+    pBuf = (int16_t *)_dma_Buffer_B;
   } 
    
-  // DMA finished playback an ready for a new buffer
-  //_event_set(event_dma_rdy,0x01);
-  dma_fill( Playing_Buff_A, pBuf, DMA_BUFFER_SIZE );
+  // DMA finished playback, ready for a new buffer
+  dma_fill( pBuf, DMA_BUFFER_SIZE );
 }
 
 

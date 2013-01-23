@@ -16,10 +16,10 @@
   SDA -> Teensy pin 18
   SCL -> Teensy pin 19
   SCK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6/LLWU_P10)
-  MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) // 22
+  MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) // can also be switched to pin 22
 */
 
-const int isDMA = 0;
+const int isDMA = 1;
 const int codecIsMaster = 1;
 
 
@@ -39,7 +39,7 @@ void setup()
   }  
   WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
   WM8731.setActive();
-  WM8731.setOutputVolume( 255 );
+  WM8731.setOutputVolume( 127 );
   Serial.println( "Initialized I2C" );
   
   delay(1000);
@@ -73,7 +73,7 @@ q15_t audy = 0.9 * 32767;
 q15_t audd = 2.0 * sin(PI*440/48000) * 32767;
 q15_t audf = 1.0 * 32767;
 uint32_t a = 0;
-uint32_t b = 0;
+uint32_t b = 0xFF;
 uint32_t p = 0;
 uint32_t nnn=0;
 void initsinevalue()
@@ -85,34 +85,26 @@ void initsinevalue()
   audy = 32767;
   a = __PKHBT( audf, audd, 16 );
   b = __PKHBT( audx, audy, 16 );
+  Serial.println(f,DEC);
 }
 void nextsinevalue() 
 {
-  // b = 0xACCF0010; audx=0xACCF; return;
+  nnn++;
+//  if(nnn>24000){nnn=0;audx=audx<<1;if(audx==0)audx=1;b=audx;};return;
+//  audx+=4;if(nnn>512){nnn=0;audx=-2048;};b=audx;return;
+//  b = 0xACCF0010; audx=0xACCF; return;
   //  http://cabezal.com/misc/minsky-circles.html
   p = __SMUAD(a,b)<<1;
   b = (b>>16) + (p & 0xFFFF0000);
   p = __SMUSD(a,b)<<1;
   b = (b>>16) + (p & 0xFFFF0000);
-  audx = (q15_t)(p & 0xFFFF);
-  nnn++;
+  audy = (q15_t)(p>>16);
   if(nnn>48000) {nnn=0;initsinevalue();};
 }
 
-/* --------------------- Direct I2S data transfer, we get the FIFO callback ----- */
 
-/*
-Writes to a TDR are ignored if the corresponding bit of TCR3[TCE] is clear or if the
-FIFO is full. If the Transmit FIFO is empty, the TDR must be written at least three bit
-clocks before the start of the next unmasked word to avoid a FIFO underrun.
-*/
 
-/*
-The transmit data ready flag is set when the number of entries in any of the enabled
-transmit FIFOs is less than or equal to the transmit FIFO watermark configuration and is
-cleared when the number of entries in each enabled transmit FIFO is greater than the
-transmit FIFO watermark configuration.
-*/
+/* --------------------- Direct I2S data transfer, we get callback to put 2 words into the FIFO ----- */
 
 int8_t ever_called_tx = 0;
 void i2s0_tx_isr(void)
@@ -124,37 +116,23 @@ void i2s0_tx_isr(void)
   if(I2S0_TCSR & I2S_TCSR_SEF)  // frame sync error
      I2S0_TCSR |= I2S_TCSR_SEF; // clear
 
-  // Send two words of data (the FIFO buffer is just 2 words)
-  I2S0_TDR0 = (uint32_t)b; //audx;
-  //nextsinevalue();
-  I2S0_TDR0 = (uint32_t)b; //audx;
+  // Send two words of data (the FIFO buffer is just 2 words, left & right)
+  I2S0_TDR0 = (uint32_t)audy;
+  I2S0_TDR0 = (uint32_t)audy;
   nextsinevalue();
 
-//  Serial.println( I2S0_TCSR, HEX );  
+//  Serial.println( I2S0_TCSR, HEX );
 }
 
 
+/* ----------------------- DMA transfer, we get callback to fill one of the ping-pong buffers ------ */
 
-
-
-/* ----------------------- DMA transfer ------------------------- */
-
-
-void dma_fill( int isA, int16_t *pBuf, int16_t len )
+void dma_fill( int16_t *pBuf, int16_t len )
 {
-  uint32_t es;
-
-//Serial.println(isA);
-
-  es = DMA_ES;
-  if(es>0) Serial.println( String("ES:") + es );  // DMA error status
-  es = DMA_ERR;
-  if(es>0) Serial.println( String("ERR:") + es );  // DMA error status
-
   while( len>0 )
   {
-    *pBuf++ = audx;
-    *pBuf++ = audx;
+    *pBuf++ = audy;
+    *pBuf++ = audy;
     nextsinevalue();
     len--;
     len--;
@@ -163,41 +141,8 @@ void dma_fill( int isA, int16_t *pBuf, int16_t len )
 }
 
 
-
-
 /* --------------------- main loop ------------------ */
 void loop()
 {
-  uint32_t es;
-  
-  if( isDMA )
-  {
-    delay(5000);
-    dma_play();
-    Serial.println( "DMA playing." );
-    
-    es = DMA_ES;
-    if(es>0) Serial.println( String("ES:") + es );  // DMA error status
-    es = DMA_ERR;
-    if(es>0) Serial.println( String("ERR:") + es );  // DMA error status
-  
-    delay(5000);
-    dma_stop();
-    Serial.println( "DMA stopped." );  
-  }
-  else
-  {
-    // Bang some data at the I2S port directly
-    delay(1000);
-    Serial.println( "I2S playing." );
-  }
-}
-
-
-void dma_error_isr(void)
-{
-  DMA_CINT = DMA_CINT_CINT(0);
-
-  Serial.println("Error ISR");
 }
 
