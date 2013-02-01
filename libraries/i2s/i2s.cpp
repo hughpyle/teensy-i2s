@@ -7,8 +7,14 @@
 #include <mk20dx128.h>
 #include "core_pins.h"
 
-
+// There's only one instance of the class
 I2S_class I2Simpl;
+
+// Buffers for 16 bit audio samples
+// (There's only one set of buffers, and they're in DMAMEM)
+int16_t DMAMEM _dma_Buffer_A[DMA_BUFFER_SIZE];
+int16_t DMAMEM _dma_Buffer_B[DMA_BUFFER_SIZE];
+int16_t DMAMEM _dma_Buffer_S[DMA_BUFFER_SIZE];  // to be used during mute
 
 // Use round-robin DMA channel priorities?  If not, they're explicitly set
 #define ROUNDROBIN
@@ -251,7 +257,7 @@ void I2S_class::dma_transmit_init(void)
     
     // configure DMA_MUX
     DMAMUX0_CHCFG0 = 0;
-    DMAMUX0_CHCFG0 = DMAMUX_CHCFG_SOURCE(DMAMUX_SOURCE_I2S0_TX);
+    DMAMUX0_CHCFG0 = DMAMUX_SOURCE_I2S0_TX;
 
     // Enable IRQ on the DMA channel 0
     // NVIC_ENABLE_IRQ(IRQ_DMA_ERROR);
@@ -279,7 +285,7 @@ void I2S_class::dma_transmit_init(void)
         ;
    
     // fill the TCD regs
-    DMA_TCD0_SADDR          = (uint32_t) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
+    DMA_TCD0_SADDR          = (const volatile void *) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
     DMA_TCD0_SOFF           = 2;                                    // 2 byte offset 
     DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)                      // No source modulo
                             | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)   // Source data 16 bit
@@ -287,7 +293,7 @@ void I2S_class::dma_transmit_init(void)
                             | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Destination 16 bit
     DMA_TCD0_NBYTES_MLNO    = 2;                                    // Transfer two bytes in each service request
     DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // source address will always be newly written before each new start
-    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
+    DMA_TCD0_DADDR          = (volatile void *) &I2S0_TDR0;                // Destination is the I2S data register
     DMA_TCD0_DOFF           = 0;                                    // No destination offset after each write
     DMA_TCD0_DLASTSGA       = 0;                                    // No scatter/gather
     DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // major loop iteration count = total samples (128)
@@ -326,7 +332,7 @@ void I2S_class::dma_transmit_init(void)
     DMA_SERQ = DMA_SERQ_SERQ(0);
 
     // enable DMAMIX
-    DMAMUX0_CHCFG0 |= DMAMUX_CHCFG_ENBL /* | DMAMUX_CHCFG_TRIG */;
+    DMAMUX0_CHCFG0 |= DMAMUX_ENABLE /* | DMAMUX_TRIG */;
 
     // Set active
     DMA_TCD0_CSR |= DMA_CSR_ACTIVE;
@@ -365,13 +371,13 @@ void I2S_class::dma_callback(void)
   if (_dma_Playing_Buffer_A)
   {                        // finished playing buffer A
     _dma_Playing_Buffer_A = 0;
-    DMA_TCD0_SADDR = (uint32_t)_dma_Buffer_B;
+    DMA_TCD0_SADDR = (const volatile void *)_dma_Buffer_B;
     pBuf = (int16_t *)_dma_Buffer_A;
   }
   else
   {
     _dma_Playing_Buffer_A = 1;
-    DMA_TCD0_SADDR = (uint32_t)_dma_Buffer_A;
+    DMA_TCD0_SADDR = (const volatile void *)_dma_Buffer_A;
     pBuf = (int16_t *)_dma_Buffer_B;
   } 
    

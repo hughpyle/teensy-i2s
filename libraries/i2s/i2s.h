@@ -7,6 +7,7 @@
 #define I2S_H
 
 #include <inttypes.h> 
+#include <WProgram.h>
 
 // Config
 #define DMA_BUFFER_SIZE 128
@@ -18,13 +19,10 @@
 #define I2S_CLOCK_44K_INTERNAL 3
 #define I2S_CLOCK_48K_INTERNAL 4
 
+
 class I2S_class
 {
     private:
-        // Buffers with 16 bit audio samples
-        int16_t _dma_Buffer_A[DMA_BUFFER_SIZE];
-        int16_t _dma_Buffer_B[DMA_BUFFER_SIZE];
-        int16_t _dma_Buffer_S[DMA_BUFFER_SIZE];  // to be used during mute
         // Flags
         bool useDMA;
         unsigned char clockType;
