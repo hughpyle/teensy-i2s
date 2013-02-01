@@ -43,15 +43,25 @@ class I2S_class
         void clearAudioBuffers();
         
     public:
-        /* */
-        // Construct without DMA, caller must implement i2s0_tx_isr().
+        /*
+         * @brief Initialize the I2S interface for use without DMA.  You must implement the i2s0_tx_isr() callback function.
+         * @param[in]   clk    Clock type.
+         * @return none.
+        */
         void start(unsigned char clk);
         
-        /* */
-        // Construct with DMA, caller must implement the callback function
+        /*
+         * @brief Initialize the I2S interface for use with DMA.  You must implement the callback function.
+         * @param[in]   clk    Clock type.
+         * @param[in]   fptr   Your callback function.  This will be called, with a pointer to a buffer where you should write int16_t audio data.
+         * @return none.
+        */
         void start(unsigned char clk, void (*fptr)( int16_t *pBuf, int16_t len ));
         
-        /* */
+        /*
+         * @brief Stop the I2S interface.  NOT YET IMPLEMENTED
+         * @return none.
+        */
         void stop();
         
         /* internal */
