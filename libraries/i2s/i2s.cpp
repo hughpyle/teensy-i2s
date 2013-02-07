@@ -392,6 +392,6 @@ void I2S_class::dma_callback(void)
  
 void dma_ch0_isr(void)
 {
-  DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
   I2Simpl.dma_callback();
+  DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
 }
