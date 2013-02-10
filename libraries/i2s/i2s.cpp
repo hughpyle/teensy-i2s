@@ -1,74 +1,199 @@
 /*
  * I2S interface for teensy 3.0
- * (cc) https://creativecommons.org/licenses/by/3.0/ by Hugh Pyle
+ * (cc) https://creativecommons.org/licenses/by/3.0/ by Hugh Pyle and other contributors
  */
  
 #include <i2s.h>
 #include <mk20dx128.h>
 #include "core_pins.h"
 
-// There's only one instance of the class
-I2S_class I2Simpl;
+// There's one instance of the class for Tx, another for Rx
+I2S_class I2STx0(0);
+I2S_class I2SRx0(1);
 
-// Buffers for 16 bit audio samples
-// (There's only one set of buffers, and they're in DMAMEM)
-int16_t DMAMEM _dma_Buffer_A[DMA_BUFFER_SIZE];
-int16_t DMAMEM _dma_Buffer_B[DMA_BUFFER_SIZE];
-int16_t DMAMEM _dma_Buffer_S[DMA_BUFFER_SIZE];  // to be used during mute
+// Buffers for 16 bit audio samples.
+// Static (not class members) because we want to put them in the DMAMEM area.
+static int16_t DMAMEM _dma_Rx_Buffer_A[DMA_BUFFER_SIZE];
+static int16_t DMAMEM _dma_Rx_Buffer_B[DMA_BUFFER_SIZE];
+static int16_t DMAMEM _dma_Tx_Buffer_A[DMA_BUFFER_SIZE];
+static int16_t DMAMEM _dma_Tx_Buffer_B[DMA_BUFFER_SIZE];
 
 // Use round-robin DMA channel priorities?  If not, they're explicitly set
 #define ROUNDROBIN
 
 
-void I2S_class::start(unsigned char clk)
+I2S_class::I2S_class(bool isRx)
+{
+    receive = isRx;
+}
+
+void I2S_class::begin(unsigned char clk, unsigned char pinpattern)
 {
     clockType = clk;
+    pinPattern = pinpattern;
     useDMA = false;
     init();
 }
 
-void I2S_class::start(unsigned char clk, void (*fptr)( int16_t *pBuf, int16_t len ))
+void I2S_class::begin(unsigned char clk, unsigned char pinpattern, void (*fptr)( int16_t *pBuf, int16_t len ))
 {
     clockType = clk;
+    pinPattern = pinpattern;
     useDMA = true;
     fnDMACallback = fptr;
     init();
 }
 
 
+void I2S_class::start()
+{
+    if( useDMA )
+    {
+        if( receive )
+        {
+            // Receive enable
+            I2S0_RCSR |= I2S_RCSR_RE            // Receive Enable
+                       | I2S_RCSR_BCE           // Bit Clock Enable
+                       ;
+        }
+        else
+        {
+            // Transmit enable.  When FIFO needs data it generates a DMA request.
+            I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
+                       | I2S_TCSR_BCE           // Bit Clock Enable
+                       | I2S_TCSR_FRDE          // FIFO Request DMA Enable
+                       ;
+        }
+    }
+    else
+    {
+        if( receive )
+        {
+            // Receive enable
+            NVIC_ENABLE_IRQ(IRQ_I2S0_RX);
+            I2S0_RCSR |= I2S_RCSR_RE            // Receive Enable
+                       | I2S_RCSR_BCE           // Bit Clock Enable
+                       ;
+        }
+        else
+        {
+            // Transmit enable.  When FIFO needs data it generates an interrupt.
+            NVIC_ENABLE_IRQ(IRQ_I2S0_TX);
+            I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
+                       | I2S_TCSR_BCE           // Bit Clock Enable
+                       | I2S_TCSR_FRIE          // FIFO Request Interrupt Enable
+                       ;
+        }
+    }
+}
+
 void I2S_class::stop()
 {
-    // TODO
+    if( useDMA )
+    {
+        /* TODO */
+    }
+    else
+    {
+        if( receive )
+        {
+            NVIC_DISABLE_IRQ(IRQ_I2S0_RX);
+        }
+        else
+        {
+            NVIC_DISABLE_IRQ(IRQ_I2S0_TX);
+        }
+    }
 }
+
+
 
 void I2S_class::io_init(void)
 {
-    // set pin mux to output i2s
-    // using the ALT6 pin selections
-    
-    // SCK  -> Teensy 9 (ALT6 I2S0_TX_BCLK) (PTC3) -- bit clock
-    PORTC_PCR3  &= PORT_PCR_MUX_MASK;
-    PORTC_PCR3  |= PORT_PCR_MUX(0x06);
-
-    // MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) -- data
-    PORTA_PCR12 &= PORT_PCR_MUX_MASK;
-    PORTA_PCR12 |= PORT_PCR_MUX(0x06);
-    
-    // MOSI -> Teensy 22 (ALT6 I2S0_TXD0) (PTC1) -- data, alternate output if you don't want to use pin 3
-//    PORTC_PCR1  &= PORT_PCR_MUX_MASK;
-//    PORTC_PCR1  |= PORT_PCR_MUX(0x06);
-    
-    // DACL -> Teensy 4 (ALT6 I2S0_TX_FS) (PTA13) -- word clock
-    PORTA_PCR13 &= PORT_PCR_MUX_MASK;
-    PORTA_PCR13 |= PORT_PCR_MUX(0x06);
-    
-    // MCLK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6) -- available if you need it (12.288MHz master clock)
-//  PORTC_PCR6  &= PORT_PCR_MUX_MASK;
-//  PORTC_PCR6  |= PORT_PCR_MUX(0x06);
+    // Pins for transmit
+    switch( pinPattern & 0x0F )
+    {
+        case I2S_TX_PIN_PATTERN_1:
+            CORE_PIN3_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN4_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN9_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            break;
+        case I2S_TX_PIN_PATTERN_2:
+            CORE_PIN3_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN4_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN9_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_MCLK
+            break;
+        case I2S_TX_PIN_PATTERN_3:
+            CORE_PIN22_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN23_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN9_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            break;
+        case I2S_TX_PIN_PATTERN_4:
+            CORE_PIN22_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN23_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN9_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_MCLK
+            break;
+        case I2S_TX_PIN_PATTERN_5:
+            CORE_PIN3_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN4_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN24_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            break;
+        case I2S_TX_PIN_PATTERN_6:
+            CORE_PIN3_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TXD0
+            CORE_PIN4_CONFIG  = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_FS
+            CORE_PIN24_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_TX_BCLK
+            CORE_PIN28_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_MCLK
+            break;
+        default:
+            break;
+    }
+ 
+    // Pins for receive
+    switch( pinPattern & 0xF0 )
+    {
+        case I2S_RX_PIN_PATTERN_1:
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            CORE_PIN12_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            break;
+        case I2S_RX_PIN_PATTERN_2:
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            CORE_PIN12_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            CORE_PIN28_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_MCLK
+            break;
+        case I2S_RX_PIN_PATTERN_3:
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_MCLK
+            CORE_PIN12_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            CORE_PIN27_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            break;
+        case I2S_RX_PIN_PATTERN_4:
+            CORE_PIN27_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            CORE_PIN29_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            break;
+        case I2S_RX_PIN_PATTERN_5:
+            CORE_PIN27_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            CORE_PIN29_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            CORE_PIN28_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_MCLK
+            break;
+        case I2S_RX_PIN_PATTERN_6:
+            CORE_PIN27_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_BCLK
+            CORE_PIN29_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RX_FS
+            CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(4);     // I2S0_RXD0
+            CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(6);     // I2S0_MCLK
+            break;
+        default:
+            break;
+    }
 }
 
 
-void I2S_class::switch_clock(unsigned char clk)
+void I2S_class::clock_init(unsigned char clk)
 {
     // The clock enable bit should be set by software [in the SIM] at the beginning of
     // the module initialization routine to enable the module clock before initialization of any of
@@ -116,17 +241,34 @@ void I2S_class::switch_clock(unsigned char clk)
 
 void I2S_class::init()
 {
-    int i;
     io_init();
-    switch_clock( clockType );
+    clock_init( clockType );
  
-    // transmit disable
+    if( receive )
+        i2s_receive_init();
+    else
+        i2s_transmit_init();
+        
+    if( useDMA )
+    {
+        dma_buffer_init();
+        if( receive )
+            dma_receive_init();
+        else
+            dma_transmit_init();
+    }
+
+}
+
+
+void I2S_class::i2s_transmit_init()
+{
+    // transmit disable while we configure everything
     I2S0_TCSR &= ~(I2S_TCSR_TE);
-    I2S0_RCSR &= ~(I2S_RCSR_RE);
     I2S0_TCR3 = 0;
     
     // Transmitter remains enabled until (and TE set) the end of the current frame
-    for( i=0; i<1000 && (I2S0_TCSR & I2S_TCSR_TE); i++ );
+    for( int i=0; i<1000 && (I2S0_TCSR & I2S_TCSR_TE); i++ );
     if( I2S0_TCSR & I2S_TCSR_TE )
         return;
 
@@ -182,44 +324,45 @@ void I2S_class::init()
       | I2S_TCR5_FBT(0x0f)      // first Bit Shifted = 31, so data is aligned to the MSB of the FIFO register
       ;
 
-    if( useDMA )
-    {
-        dma_init();
-        startWithDMA();
-    }
-    else
-    {
-        startWithoutDMA();
-    }
-
 }
 
-
-void I2S_class::startWithoutDMA()
+void I2S_class::i2s_receive_init()
 {
-    // Transmit enable.  When FIFO needs data it generates an interrupt.
-    NVIC_ENABLE_IRQ(IRQ_I2S0_TX);
-    I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
-               | I2S_TCSR_BCE           // Bit Clock Enable
-               | I2S_TCSR_FRIE          // FIFO Request Interrupt Enable
-               ;
-    // Receive enable
-    I2S0_RCSR |= I2S_RCSR_RE            // Transmit Enable
-               | I2S_RCSR_BCE           // Bit Clock Enable
-               ;
-}
+    // receive disable while we configure everything
+    I2S0_RCSR &= ~(I2S_RCSR_RE);
+    
+    // From loglow  (master mode)
+    uint8_t nChans = I2S_AUDIO_NUM_CHANS - 1;
+    uint8_t nBits  = I2S_AUDIO_BIT_DEPTH - 1;
 
-void I2S_class::startWithDMA()
-{
-    // Transmit enable.  When FIFO needs data it generates a DMA request.
-    I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
-               | I2S_TCSR_BCE           // Bit Clock Enable
-               | I2S_TCSR_FRDE          // FIFO Request DMA Enable
-               ;
-    // Receive enable
-    I2S0_RCSR |= I2S_RCSR_RE            // Transmit Enable
-               | I2S_RCSR_BCE           // Bit Clock Enable
-               ;
+    SIM_SCGC6 |= SIM_SCGC6_I2S;          // enable clock to the I2S module
+    I2S0_MDR  |= I2S_MDR_FRACT(15);      // output = input * (FRACT + 1) / (DIVIDE + 1)
+    I2S0_MDR  |= I2S_MDR_DIVIDE(124);    // 12.288 MHz = 96 MHz * (16 / 125)
+    I2S0_MCR  |= I2S_MCR_MOE;            // enable MCLK pin as output
+    // --------------------------------------------------------------------------------
+    I2S0_RCR1 |= I2S_RCR1_RFW(nChans);   // set FIFO watermark
+    // --------------------------------------------------------------------------------
+    I2S0_RCR2 |= I2S_RCR2_MSEL(1);       // use MCLK as BCLK source
+    I2S0_RCR2 |= I2S_RCR2_SYNC(0);       // use asynchronous mode
+    I2S0_RCR2 |= I2S_RCR2_DIV(1);        // (DIV + 1) * 2, 12.288 MHz / 4 = 3.072 MHz
+    I2S0_RCR2 |= I2S_RCR2_BCD;           // generate BCLK, master mode
+    I2S0_RCR2 |= I2S_TCR2_BCP;           // BCLK is active low
+    // --------------------------------------------------------------------------------
+    I2S0_RCR3 |= I2S_RCR3_RCE;           // enable receive channel
+    // --------------------------------------------------------------------------------
+    I2S0_RCR4 |= I2S_RCR4_FRSZ(nChans);  // frame size in words
+    I2S0_RCR4 |= I2S_RCR4_SYWD(nBits);   // bit width of WCLK
+    I2S0_RCR4 |= I2S_RCR4_MF;            // MSB (most significant bit) first
+    I2S0_RCR4 |= I2S_RCR4_FSD;           // generate WCLK, master mode
+    I2S0_RCR4 |= I2S_RCR4_FSE;           // extra bit before frame starts
+    // --------------------------------------------------------------------------------
+    I2S0_RCR5 |= I2S_RCR5_W0W(nBits);    // bits per word, first frame
+    I2S0_RCR5 |= I2S_RCR5_WNW(nBits);    // bits per word, nth frame
+    I2S0_RCR5 |= I2S_RCR5_FBT(nBits);    // index shifted for FIFO
+    // --------------------------------------------------------------------------------
+    I2S0_RCSR |= I2S_RCSR_BCE;           // enable the BCLK output
+    I2S0_RCSR |= I2S_RCSR_RE;            // enable receive globally
+    I2S0_RCSR |= I2S_RCSR_FRIE;          // enable FIFO request interrupt
 }
 
 
@@ -230,23 +373,22 @@ void I2S_class::startWithDMA()
  
 
 
-void I2S_class::clearAudioBuffers(void)
+void I2S_class::dma_buffer_init(void)
 {
-    int i;
-    int16_t *p1,*p2,*p3;
-    p1 = _dma_Buffer_A;
-    p2 = _dma_Buffer_B;
-    p3 = _dma_Buffer_S;
-    for (i=0 ; i < DMA_BUFFER_SIZE; i++) 
+    if(receive)
     {
-        *p1++ = 0;   // mute initially
-        *p2++ = 0;   // mute initially
-        *p3++ = 0;   // mute forever
-    }  
+    memset( _dma_Rx_Buffer_A, 0, DMA_BUFFER_SIZE * sizeof(int16_t) );
+    memset( _dma_Rx_Buffer_B, 0, DMA_BUFFER_SIZE * sizeof(int16_t) );
+    }
+    else
+    {
+    memset( _dma_Tx_Buffer_A, 0, DMA_BUFFER_SIZE * sizeof(int16_t) );
+    memset( _dma_Tx_Buffer_B, 0, DMA_BUFFER_SIZE * sizeof(int16_t) );
+    }
+    _dma_using_Buffer_A = 1;
 }
 
 
-#define LOOP1
 
 void I2S_class::dma_transmit_init(void)  
 {
@@ -274,7 +416,6 @@ void I2S_class::dma_transmit_init(void)
     DMA_DCHPRI0 = 3;  // cannot be pre-empted, can pre-empt, highest priority
 #endif
 
-#ifdef LOOP1
     // Control register
     DMA_CR = 0              // Normal
 //      | DMA_CR_EDBG_MASK  // Stall DMA transfers when debugger is halted (avoid noise)
@@ -285,7 +426,7 @@ void I2S_class::dma_transmit_init(void)
         ;
    
     // fill the TCD regs
-    DMA_TCD0_SADDR          = (const volatile void *) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
+    DMA_TCD0_SADDR          = (const volatile void *) _dma_Tx_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
     DMA_TCD0_SOFF           = 2;                                    // 2 byte offset 
     DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)                      // No source modulo
                             | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)   // Source data 16 bit
@@ -300,32 +441,6 @@ void I2S_class::dma_transmit_init(void)
     DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // major loop iteration count = total samples (128), no channel links
     DMA_TCD0_CSR            = DMA_CSR_INTMAJOR                      // interrupt on major loop completion
                             | DMA_CSR_BWC(3);                       // DMA bandwidth control
-#endif
-
-#ifdef LOOP2
-    // Control register
-    DMA_CR = DMA_CR_EMLM  // minor looping
-#ifdef ROUNDROBIN
-        | DMA_CR_ERCA
-#endif
-        ;
-   
-    // fill the TCD regs
-    DMA_TCD0_NBYTES_MLOFFYES = DMA_NBYTES_SMLOE
-                            | DMA_NBYTES_MLOFFYES_MLOFF(2 - DMA_BUFFER_SIZE*2*2*2)
-                            | DMA_NBYTES_MLOFFYES_NBYTES(2*2);
-    DMA_TCD0_ATTR           = DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)
-                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Transfer one word at a time, no modulo
-    DMA_TCD0_SADDR          = (uint32_t) _dma_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
-    DMA_TCD0_SOFF           = DMA_BUFFER_SIZE*2*2;
-    DMA_TCD0_SLAST          = -(DMA_BUFFER_SIZE*2*2*3 - 2);0;
-    DMA_TCD0_DADDR          = (uint32_t) &I2S0_TDR0;                // Destination is the I2S data register
-    DMA_TCD0_DOFF           = 0;                                    // Zero offset
-    DMA_TCD0_DLASTSGA       = 0;                                    // no scatter/gather
-    DMA_TCD0_CITER_ELINKNO  = (DMA_BUFFER_SIZE*2) & DMA_CITER_MASK;     // total samples (128)
-    DMA_TCD0_BITER_ELINKNO  = (DMA_BUFFER_SIZE*2) & DMA_BITER_MASK;     // no chan links, total samples (128)
-    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR | DMA_CSR_INTHALF;
-#endif
 
     // enable DMA channel 0 requests
     DMA_ERQ = DMA_ERQ_ERQ0;
@@ -341,57 +456,81 @@ void I2S_class::dma_transmit_init(void)
     //DMA_TCD0_CSR |= DMA_CSR_START;
 }
 
-
-
-
-void I2S_class::dma_init(void)  
+void I2S_class::dma_receive_init(void)  
 {
-    clearAudioBuffers();
-    _dma_Playing_Buffer_A = 1;
-    dma_transmit_init();
 }
 
-void I2S_class::dma_play(void) 
+
+
+void I2S_class::dma_start(void) 
 {
-    //clearAudioBuffers();
     DMA_SERQ = DMA_SERQ_SERQ(0);
 }
 
 void I2S_class::dma_stop(void) 
 {
-    //DMA_TCD0_SADDR = (uint32_t) _dma_Buffer_S; // silence feed for DMA0
-    //clearAudioBuffers();
     DMA_CERQ = DMA_CERQ_CERQ(0);
 }
 
 
-void I2S_class::dma_callback(void)
+void I2S_class::dma_tx_callback(void)
 {
-  int16_t *pBuf;
-  if (_dma_Playing_Buffer_A)
-  {                        // finished playing buffer A
-    _dma_Playing_Buffer_A = 0;
-    DMA_TCD0_SADDR = (const volatile void *)_dma_Buffer_B;
-    pBuf = (int16_t *)_dma_Buffer_A;
-  }
-  else
-  {
-    _dma_Playing_Buffer_A = 1;
-    DMA_TCD0_SADDR = (const volatile void *)_dma_Buffer_A;
-    pBuf = (int16_t *)_dma_Buffer_B;
-  } 
-   
-  // DMA finished playback, ready for a new buffer
-  fnDMACallback( pBuf, DMA_BUFFER_SIZE );
+    int16_t *dmaBuf;
+    int16_t *yourBuf;
+    if (_dma_using_Buffer_A)
+    {
+        _dma_using_Buffer_A = 0;
+        dmaBuf = _dma_Tx_Buffer_B;
+        yourBuf = _dma_Tx_Buffer_A;
+    }
+    else
+    {
+        _dma_using_Buffer_A = 1;
+        dmaBuf = _dma_Tx_Buffer_A;
+        yourBuf = _dma_Tx_Buffer_B;
+    }
+    // Play from one buffer
+    DMA_TCD0_SADDR = (const volatile void *)dmaBuf;
+    // while you fill the other
+    fnDMACallback( yourBuf, DMA_BUFFER_SIZE );
 }
 
+void I2S_class::dma_rx_callback(void)
+{
+    int16_t *dmaBuf;
+    int16_t *yourBuf;
+    if (_dma_using_Buffer_A)
+    {
+        _dma_using_Buffer_A = 0;
+        dmaBuf = _dma_Rx_Buffer_B;
+        yourBuf = _dma_Rx_Buffer_A;
+    }
+    else
+    {
+        _dma_using_Buffer_A = 1;
+        dmaBuf = _dma_Rx_Buffer_A;
+        yourBuf = _dma_Rx_Buffer_B;
+    }
+    // Read into one buffer
+    DMA_TCD1_SADDR = (const volatile void *)dmaBuf;
+    // while you read the other
+    fnDMACallback( yourBuf, DMA_BUFFER_SIZE );
+}
 
 
 
 /* DMA ISR */
  
+// DMA channel 0 for Tx
 void dma_ch0_isr(void)
 {
-  I2Simpl.dma_callback();
-  DMA_CINT = DMA_CINT_CINT(0);                 // use the Clear Intr. Request register 
+    I2STx0.dma_tx_callback();
+    DMA_CINT = DMA_CINT_CINT(0);                 // Clear the interrupt
+}
+
+// DMA channel 1 for Rx
+void dma_ch1_isr(void)
+{
+    I2SRx0.dma_rx_callback();
+    DMA_CINT = DMA_CINT_CINT(1);                 // Clear the interrupt
 }
