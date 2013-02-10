@@ -55,12 +55,14 @@ void setup()
   
   if( isDMA )
   {
-    I2Simpl.start( clock, dma_fill );
+    I2STx0.begin( clock, I2S_TX_PIN_PATTERN_1, dma_fill );
+    I2STx0.start();
     Serial.println( "Initialized I2S with DMA" );
   }
   else
   {
-    I2Simpl.start( clock );
+    I2STx0.begin( clock, I2S_TX_PIN_PATTERN_1 );
+    I2STx0.start();
     Serial.println( "Initialized I2S without DMA" );
   }
 }
