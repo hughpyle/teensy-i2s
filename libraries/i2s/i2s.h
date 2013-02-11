@@ -141,29 +141,32 @@ class I2S_class
         I2S_class(uint8_t isRx);
         
         /*
-         * @brief Initialize the I2S interface for use without DMA.
-         *        You must implement the callback function that you pass to start().
-         * @return none.
+         * @brief       Initialize the I2S interface for use without DMA.
+         *              You must implement the callback function that you pass to start().
+         * @param[in]   fptr    Your callback function, will be called with a pointer to a buffer
+         *                      where you will read or write I2S_FRAME_SIZE of _I2S_SAMPLE_T audio data.
+         * @return      none.
          */
         void begin(void (*fptr)( _I2S_SAMPLE_T *pBuf ));
         
         /*
-         * @brief Initialize the I2S interface for use with DMA.
-         *        You must implement the callback function that you pass to start().
-         * @param[in]   fptr        Your function will be called with a pointer to a buffer where you will read or write _I2S_SAMPLE_T audio data.
-         * @return none.
+         * @brief       Initialize the I2S interface for use with DMA.
+         *              You must implement the callback function that you pass to start().
+         * @param[in]   fptr    Your callback function, will be called with a pointer to a buffer
+         *                      where you will read or write numSamples of _I2S_SAMPLE_T audio data.
+         * @return      none.
          */
         void begin(void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ));
 
         /*
-         * @brief Start the I2S interface.
-         * @return none.
+         * @brief   Start the I2S interface.
+         * @return  none.
          */
         void start();
         
         /*
-         * @brief Stop the I2S interface.
-         * @return none.
+         * @brief   Stop the I2S interface.
+         * @return  none.
          */
         void stop();
 
