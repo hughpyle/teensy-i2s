@@ -6,6 +6,7 @@
   SCL -> Teensy pin 19
   SCK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6/LLWU_P10)
   MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) // can also be switched to pin 22
+  DACL -> Teensy 4 (ALT6 I2S0_TX_FS)        // can also be switched to pin 23, 25
 */
 
 
