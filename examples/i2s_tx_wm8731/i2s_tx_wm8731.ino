@@ -1,11 +1,17 @@
 /*
   I2S & DMA digital audio demonstrator for Teensy 3.0
-  Interfaces using Wolfson WM8731 codec.  For example using the Mikro proto board.
+  Interfaces using Wolfson WM8731 codec.
   
-  SDA -> Teensy pin 18
-  SCL -> Teensy pin 19
-  SCK -> Teensy 11 (ALT6 I2S0_MCLK) (PTC6/LLWU_P10)
-  MOSI -> Teensy 3 (ALT6 I2S0_TXD0) (PTA12) // can also be switched to pin 22
+  For example using the Mikro proto board.
+  SCK  -> Teensy 9  (I2S0_TX_BCLK)
+  MISO -> not connected for this transmit-only example
+  MOSI -> Teensy 3  (I2S0_TXD0).  Can also be switched to pin 22.
+  ADCL -> not connected for this transmit-only example
+  DACL -> Teensy 4  (I2S0_TX_FS).  Can also be switched to pin 23 or 25
+  SDA  -> Teensy 18 (I2C0_SDA)
+  SCL  -> Teensy 19 (I2C0_SCL)
+  3.3V -> Teensy 3.3v
+  GND  -> Teensy GND
 */
 
 
