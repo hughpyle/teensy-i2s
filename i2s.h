@@ -1,7 +1,7 @@
 /*
  * I2S interface for Teensy 3.0
+ * Fork this on github https://github.com/hughpyle/teensy-i2s
  *
- * https://github.com/hughpyle/teensy-i2s
  * Copyright (c) 2013 by Hugh Pyle and contributors.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,29 +30,17 @@
 #include <inttypes.h> 
 #include <WProgram.h>
 
-// Audio configuration.  You can override these before including the header.
-#ifndef I2S_FRAME_SIZE
+// Audio configuration.  Edit these here if you need to.
 #define I2S_FRAME_SIZE         2            // 2=stereo
-#endif
-#ifndef I2S_IO_BIT_DEPTH
 #define I2S_IO_BIT_DEPTH       32           // Number of bits per sample in the physical data (8, 16 or 32)
-#endif
-#ifndef I2S_BUFFER_BIT_DEPTH
 #define I2S_BUFFER_BIT_DEPTH   16           // Number of bits per sample in the DMA buffer (8, 16 or 32)
-#endif
 
-// Clock types
+// Clock type constants
 #define I2S_CLOCK_EXTERNAL     0            // The bit clock is provided by an external device (e.g. the codec)
 #define I2S_CLOCK_8K_INTERNAL  1            // The bit clock is 8kHz, internally generated
 #define I2S_CLOCK_32K_INTERNAL 2            // The bit clock is 32kHz, internally generated
 #define I2S_CLOCK_44K_INTERNAL 3            // The bit clock is 44.1kHz, internally generated
 #define I2S_CLOCK_48K_INTERNAL 4            // The bit clock is 48kHz, internally generated
-
-// You should define I2S_CLOCK_TYPE to be the appropriate sort of clock for your hardware setup
-// Otherwise the default is this:
-#ifndef I2S_CLOCK_TYPE
-#define I2S_CLOCK_TYPE         I2S_CLOCK_EXTERNAL
-#endif
 
 
 // Pin patterns
@@ -92,18 +80,16 @@
 
 // You should define I2S_PIN_PATTERN to be the appropriate pin pattern for your hardware setup.
 // Otherwise the default is this
-#ifndef I2S_PIN_PATTERN
 #define I2S_PIN_PATTERN        I2S_TX_PIN_PATTERN_1 + I2S_RX_PIN_PATTERN_1
-#endif
 
 
 // DMA buffer size (in samples).
 // Using ping-pong DMA, this determines your latency.
 // If you need super-low latency, set this smaller (or use I2S without DMA).
-#ifndef DMA_BUFFER_SIZE
 #define DMA_BUFFER_SIZE        128
-#endif
 
+// Use round-robin DMA channel priorities?  If not, they're explicitly set
+#define ROUNDROBIN
 
 // Data type for the API
 #if I2S_BUFFER_BIT_DEPTH==8
@@ -119,6 +105,7 @@ class I2S_class
 {
     private:
         // Flags
+        uint8_t clock;      /* one of I2S_CLOCK_xxx */
         uint8_t receive;    /* 1 or 0 */
         bool useDMA;
         volatile bool _dma_using_Buffer_A;
@@ -127,7 +114,7 @@ class I2S_class
         
         void init();
         void io_init();
-        void clock_init(unsigned char clk);
+        void clock_init();
         void i2s_transmit_init();
         void i2s_receive_init();
         void dma_buffer_init();
@@ -142,30 +129,34 @@ class I2S_class
         
         /*
          * @brief       Initialize the I2S interface for use without DMA.
-         *              You must implement the callback function that you pass to start().
-         * @param[in]   fptr    Your callback function, will be called with a pointer to a buffer
+         *
+         * @param[in]   clk     The clock type and speed, one of I2S_CLOCK_xxx
+         * @param[in]   fptr    The callback function that your sketch implements.
+         *                      This will be called with a pointer to a buffer
          *                      where you will read or write I2S_FRAME_SIZE of _I2S_SAMPLE_T audio data.
          * @return      none.
          */
-        void begin(void (*fptr)( _I2S_SAMPLE_T *pBuf ));
+        void begin(uint8_t clk, void (*fptr)( _I2S_SAMPLE_T *pBuf ));
         
         /*
          * @brief       Initialize the I2S interface for use with DMA.
-         *              You must implement the callback function that you pass to start().
-         * @param[in]   fptr    Your callback function, will be called with a pointer to a buffer
+         *
+         * @param[in]   clk     The clock type and speed, one of I2S_CLOCK_xxx
+         * @param[in]   fptr    The callback function that your sketch implements.
+         *                      This will be called with a pointer to a buffer
          *                      where you will read or write numSamples of _I2S_SAMPLE_T audio data.
          * @return      none.
          */
-        void begin(void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ));
+        void begin(uint8_t clk, void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ));
 
         /*
-         * @brief   Start the I2S interface.
+         * @brief   Start the I2S interface.  (You must have initialized first).
          * @return  none.
          */
         void start();
         
         /*
-         * @brief   Stop the I2S interface.
+         * @brief   Stop the I2S interface.  (You must have initialized first).
          * @return  none.
          */
         void stop();

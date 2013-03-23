@@ -1,7 +1,7 @@
 /*
  * I2S interface for Teensy 3.0
+ * Fork this on github https://github.com/hughpyle/teensy-i2s
  *
- * https://github.com/hughpyle/teensy-i2s
  * Copyright (c) 2013 by Hugh Pyle and contributors.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -44,9 +44,6 @@ static _I2S_SAMPLE_T _i2s_Rx_Buffer[I2S_FRAME_SIZE];
 static _I2S_SAMPLE_T _i2s_Tx_Buffer[I2S_FRAME_SIZE];
 
 
-// Use round-robin DMA channel priorities?  If not, they're explicitly set
-#define ROUNDROBIN
-
 #define FRSZ (I2S_FRAME_SIZE-1)
 #define SYWD (I2S_IO_BIT_DEPTH-1)
 
@@ -56,15 +53,17 @@ I2S_class::I2S_class(uint8_t isRx)
     receive = isRx;
 }
 
-void I2S_class::begin(void (*fptr)( _I2S_SAMPLE_T *pBuf))
+void I2S_class::begin(uint8_t clk, void (*fptr)( _I2S_SAMPLE_T *pBuf))
 {
+    clock = clk;
     useDMA = false;
     fnI2SCallback = fptr;
     init();
 }
 
-void I2S_class::begin(void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ))
+void I2S_class::begin(uint8_t clk, void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ))
 {
+    clock = clk;
     useDMA = true;
     fnDMACallback = fptr;
     init();
@@ -221,13 +220,13 @@ void I2S_class::io_init(void)
 }
 
 
-void I2S_class::clock_init(unsigned char clk)
+void I2S_class::clock_init()
 {
     // Disable system clock to the I2S module
     //SIM_SCGC6 &= ~(SIM_SCGC6_I2S);
     SIM_SCGC6 |= SIM_SCGC6_I2S;
 
-    if(clk==I2S_CLOCK_EXTERNAL)
+    if(clock==I2S_CLOCK_EXTERNAL)
     {
         // Select input clock 0
         // Configure to input the bit-clock from pin, bypasses the MCLK divider
@@ -241,7 +240,7 @@ void I2S_class::clock_init(unsigned char clk)
         
         // 8k, 12k, 16k, 32k, etc all clock the I2S module at 12.288 MHz
         // 11025Hz, 22050, 44100 clock the I2S module at 11.2896 MHz
-        switch( clk )
+        switch( clock )
         {
             case I2S_CLOCK_44K_INTERNAL:
                 // Divide to get the 11.2896 MHz from 96MHz (96* (2/17))
@@ -266,7 +265,7 @@ void I2S_class::clock_init(unsigned char clk)
 void I2S_class::init()
 {
     io_init();
-    clock_init( I2S_CLOCK_TYPE );
+    clock_init();
  
     if( receive )
         i2s_receive_init();
@@ -301,11 +300,12 @@ void I2S_class::i2s_transmit_init()
     // --------------------------------------------------------------------------------
     I2S0_TCR2  = I2S_TCR2_SYNC(0);          // use asynchronous mode
     I2S0_TCR2 |= I2S_TCR2_BCP;              // BCLK polarity: active low
-#if I2S_CLOCK_TYPE != I2S_CLOCK_EXTERNAL
-    I2S0_TCR2 |= I2S_TCR2_MSEL(0);          // use bus clock as BCLK source
-    I2S0_TCR2 |= I2S_TCR2_DIV(7);           // divide internal master clock to generate bit clock
-    I2S0_TCR2 |= I2S_TCR2_BCD;              // BCLK is generated internally (master mode)
-#endif
+    if( clock != I2S_CLOCK_EXTERNAL )
+    {
+        I2S0_TCR2 |= I2S_TCR2_MSEL(0);          // use bus clock as BCLK source
+        I2S0_TCR2 |= I2S_TCR2_DIV(7);           // divide internal master clock to generate bit clock
+        I2S0_TCR2 |= I2S_TCR2_BCD;              // BCLK is generated internally (master mode)
+    }
     // --------------------------------------------------------------------------------    
     I2S0_TCR3 =  I2S_TCR3_TCE;              // transmit data channel is enabled
     // --------------------------------------------------------------------------------
@@ -313,9 +313,10 @@ void I2S_class::i2s_transmit_init()
     I2S0_TCR4 |= I2S_TCR4_SYWD(SYWD);       // bit width of a word (plus one)
     I2S0_TCR4 |= I2S_TCR4_MF;               // MSB (most significant bit) first
     I2S0_TCR4 |= I2S_TCR4_FSE;              // Frame sync one bit before the frame
-#if I2S_CLOCK_TYPE == I2S_CLOCK_EXTERNAL
-    I2S0_TCR4 |= I2S_TCR4_FSD;              // WCLK is generated internally (master mode)
-#endif
+    if( clock == I2S_CLOCK_EXTERNAL )
+    {
+        I2S0_TCR4 |= I2S_TCR4_FSD;              // WCLK is generated internally (master mode)
+    }
     // --------------------------------------------------------------------------------
     I2S0_TCR5  = I2S_TCR5_W0W(SYWD);        // bits per word, first frame
     I2S0_TCR5 |= I2S_TCR5_WNW(SYWD);        // bits per word, nth frame
@@ -338,11 +339,12 @@ void I2S_class::i2s_receive_init()
     // --------------------------------------------------------------------------------
     I2S0_RCR2  = I2S_RCR2_SYNC(0);          // use asynchronous mode
     I2S0_RCR2 |= I2S_TCR2_BCP;              // BCLK polarity: active low
-#if I2S_CLOCK_TYPE != I2S_CLOCK_EXTERNAL
-    I2S0_RCR2 |= I2S_RCR2_MSEL(1);          // use MCLK as BCLK source
-    I2S0_RCR2 |= I2S_RCR2_DIV(1);           // (DIV + 1) * 2, 12.288 MHz / 4 = 3.072 MHz
-    I2S0_RCR2 |= I2S_RCR2_BCD;              // BCLK is generated internally in Master mode
-#endif
+    if( clock != I2S_CLOCK_EXTERNAL )
+    {
+        I2S0_RCR2 |= I2S_RCR2_MSEL(1);          // use MCLK as BCLK source
+        I2S0_RCR2 |= I2S_RCR2_DIV(1);           // (DIV + 1) * 2, 12.288 MHz / 4 = 3.072 MHz
+        I2S0_RCR2 |= I2S_RCR2_BCD;              // BCLK is generated internally in Master mode
+    }
     // --------------------------------------------------------------------------------
     I2S0_RCR3  = I2S_RCR3_RCE;              // receive data channel is enabled
     // --------------------------------------------------------------------------------
@@ -350,9 +352,10 @@ void I2S_class::i2s_receive_init()
     I2S0_RCR4 |= I2S_RCR4_SYWD(SYWD);       // bit width of a word (plus one)
     I2S0_RCR4 |= I2S_RCR4_MF;               // MSB (most significant bit) first
     I2S0_RCR4 |= I2S_RCR4_FSE;              // Frame sync one bit before the frame
-#if I2S_CLOCK_TYPE == I2S_CLOCK_EXTERNAL
-    I2S0_RCR4 |= I2S_RCR4_FSD;              // WCLK is generated internally (master mode)
-#endif
+    if( clock == I2S_CLOCK_EXTERNAL )
+    {
+        I2S0_RCR4 |= I2S_RCR4_FSD;              // WCLK is generated internally (master mode)
+    }
     // --------------------------------------------------------------------------------
     I2S0_RCR5  = I2S_RCR5_W0W(SYWD);        // bits per word, first frame
     I2S0_RCR5 |= I2S_RCR5_WNW(SYWD);        // bits per word, nth frame

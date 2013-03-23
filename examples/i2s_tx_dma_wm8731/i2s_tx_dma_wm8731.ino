@@ -2,16 +2,30 @@
   I2S & DMA digital audio demonstrator for Teensy 3.0
   Interfaces using Wolfson WM8731 codec.
   
-  For example using the Mikro proto board.
-  SCK  -> Teensy 9  (I2S0_TX_BCLK)
-  MISO -> not connected for this transmit-only example
-  MOSI -> Teensy 3  (I2S0_TXD0).  Can also be switched to pin 22.
-  ADCL -> not connected for this transmit-only example
-  DACL -> Teensy 4  (I2S0_TX_FS).  Can also be switched to pin 23 or 25
-  SDA  -> Teensy 18 (I2C0_SDA)
-  SCL  -> Teensy 19 (I2C0_SCL)
-  3.3V -> Teensy 3.3v
-  GND  -> Teensy GND
+  To use the Mikro proto board (as master): set clock type to I2S_CLOCK_EXTERNAL
+  Note: this board doesn't have line-in connections.
+      SCK  -> Teensy 9  (I2S0_TX_BCLK)
+      MISO -> not connected for this transmit-only example
+      MOSI -> Teensy 3  (I2S0_TXD0).  Can also be switched to pin 22.
+      ADCL -> not connected for this transmit-only example
+      DACL -> Teensy 4  (I2S0_TX_FS).  Can also be switched to pin 23 or 25
+      SDA  -> Teensy 18 (I2C0_SDA)
+      SCL  -> Teensy 19 (I2C0_SCL)
+      3.3V -> Teensy 3.3v
+      GND  -> Teensy GND
+  
+  To use the openmusiclabs audio codec shield (as slave): set clock type to I2S_CLOCK_44K_INTERNAL.
+  Note: this board cannot be used as master, only as slave.
+      J1#2 GND
+      J1#4 3.3v      (or 5V, but then you must NOT connect the analog pots A0/A1 to teensy pins directly)
+      J1#5 3.3v
+      J2#1 SCL(A5)   -> Teensy 19 (I2C0_SCL)
+      J2#2 SDA(A4)   -> Teensy 18 (I2C0_SDA)
+      J3#3 SCK(D13)  -> Teensy 9  (I2S0_TX_BCLK)
+      J3#4 MISO(D12) n/c
+      J3#5 MOSI(D11) -> Teensy 3  (I2S0_TXD0)
+      J3#6 SS(D10)   -> Teensy 4  (I2S0_TX_FS)
+      J4#3 CLKOUT(D5)    -> Teensy 11 (I2S0_MCLK)
 */
 
 
@@ -22,9 +36,8 @@
 
 
 /* I2S digital audio */
-#define I2S_CLOCK_TYPE    I2S_CLOCK_EXTERNAL
-#define I2S_PIN_PATTERN   I2S_TX_PIN_PATTERN_1
 #include <i2s.h>
+const uint8_t clocktype = I2S_CLOCK_44K_INTERNAL;
 
 
 // audio data
@@ -78,14 +91,18 @@ void setup()
   Serial.println( "Initializing." );
 
   delay(1000);
-  unsigned char interface = WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) | WM8731_INTERFACE_MASTER;
-  WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
+  unsigned char interface = WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16);
+  if( clocktype==I2S_CLOCK_EXTERNAL )
+  {
+    interface |= WM8731_INTERFACE_MASTER;
+  }
+  WM8731.begin( low, WM8731_SAMPLING_RATE(hz44100), interface );
   WM8731.setActive();
   WM8731.setOutputVolume( 127 );
   Serial.println( "Initialized I2C" );
   
   delay(1000);
-  I2STx0.begin( dma_callback );
+  I2STx0.begin( clocktype, dma_callback );
   Serial.println( "Initialized I2S with DMA" );
   
   I2STx0.start();
