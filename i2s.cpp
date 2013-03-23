@@ -313,7 +313,7 @@ void I2S_class::i2s_transmit_init()
     I2S0_TCR4 |= I2S_TCR4_SYWD(SYWD);       // bit width of a word (plus one)
     I2S0_TCR4 |= I2S_TCR4_MF;               // MSB (most significant bit) first
     I2S0_TCR4 |= I2S_TCR4_FSE;              // Frame sync one bit before the frame
-    if( clock == I2S_CLOCK_EXTERNAL )
+    if( clock != I2S_CLOCK_EXTERNAL )
     {
         I2S0_TCR4 |= I2S_TCR4_FSD;              // WCLK is generated internally (master mode)
     }
