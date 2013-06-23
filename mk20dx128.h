@@ -1,3 +1,35 @@
+/* Modifications for I2S based on teensy 1.15 rc2, see https://github.com/hughpyle/teensy-i2s */
+
+/* Teensyduino Core Library
+ * http://www.pjrc.com/teensy/
+ * Copyright (c) 2013 PJRC.COM, LLC. and contributors.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * 1. The above copyright notice and this permission notice shall be 
+ * included in all copies or substantial portions of the Software.
+ *
+ * 2. If the Software is incorporated into a build system that allows 
+ * selection among a list of target devices, then similar target
+ * devices manufactured by PJRC.COM must be included in the list of
+ * target devices and selectable in the same manner.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #ifndef _mk20dx128_h_
 #define _mk20dx128_h_
 
@@ -288,14 +320,43 @@ extern "C" {
 
 // Chapter 14: System Mode Controller
 #define SMC_PMPROT              *(volatile uint8_t  *)0x4007E000 // Power Mode Protection Register
+#define SMC_PMPROT_AVLP			(uint8_t)0x20			// Allow very low power modes
+#define SMC_PMPROT_ALLS			(uint8_t)0x08			// Allow low leakage stop mode
+#define SMC_PMPROT_AVLLS		(uint8_t)0x02			// Allow very low leakage stop mode
 #define SMC_PMCTRL              *(volatile uint8_t  *)0x4007E001 // Power Mode Control Register
+#define SMC_PMCTRL_LPWUI		(uint8_t)0x80			// Low Power Wake Up on Interrupt
+#define SMC_PMCTRL_RUNM(n)		(uint8_t)(((n) & 0x03) << 5)	// Run Mode Control
+#define SMC_PMCTRL_STOPA		(uint8_t)0x08			// Stop Aborted
+#define SMC_PMCTRL_STOPM(n)		(uint8_t)((n) & 0x07)		// Stop Mode Control
 #define SMC_VLLSCTRL            *(volatile uint8_t  *)0x4007E002 // VLLS Control Register
+#define SMC_VLLSCTRL_PORPO		(uint8_t)0x20			// POR Power Option
+#define SMC_VLLSCTRL_VLLSM(n)		(uint8_t)((n) & 0x07)		// VLLS Mode Control
 #define SMC_PMSTAT              *(volatile uint8_t  *)0x4007E003 // Power Mode Status Register
+#define SMC_PMSTAT_RUN			(uint8_t)0x01			// Current power mode is RUN
+#define SMC_PMSTAT_STOP			(uint8_t)0x02			// Current power mode is STOP
+#define SMC_PMSTAT_VLPR			(uint8_t)0x04			// Current power mode is VLPR
+#define SMC_PMSTAT_VLPW			(uint8_t)0x08			// Current power mode is VLPW
+#define SMC_PMSTAT_VLPS			(uint8_t)0x10			// Current power mode is VLPS
+#define SMC_PMSTAT_LLS			(uint8_t)0x20			// Current power mode is LLS
+#define SMC_PMSTAT_VLLS			(uint8_t)0x40			// Current power mode is VLLS
 
 // Chapter 15: Power Management Controller
 #define PMC_LVDSC1              *(volatile uint8_t  *)0x4007D000 // Low Voltage Detect Status And Control 1 register
+#define PMC_LVDSC1_LVDF			(uint8_t)0x80			// Low-Voltage Detect Flag
+#define PMC_LVDSC1_LVDACK		(uint8_t)0x40			// Low-Voltage Detect Acknowledge
+#define PMC_LVDSC1_LVDIE		(uint8_t)0x20			// Low-Voltage Detect Interrupt Enable
+#define PMC_LVDSC1_LVDRE		(uint8_t)0x10			// Low-Voltage Detect Reset Enable
+#define PMC_LVDSC1_LVDV(n)		(uint8_t)((n) & 0x03)		// Low-Voltage Detect Voltage Select
 #define PMC_LVDSC2              *(volatile uint8_t  *)0x4007D001 // Low Voltage Detect Status And Control 2 register
+#define PMC_LVDSC2_LVWF			(uint8_t)0x80			// Low-Voltage Warning Flag
+#define PMC_LVDSC2_LVWACK		(uint8_t)0x40			// Low-Voltage Warning Acknowledge
+#define PMC_LVDSC2_LVWIE		(uint8_t)0x20			// Low-Voltage Warning Interrupt Enable
+#define PMC_LVDSC2_LVWV(n)		(uint8_t)((n) & 0x03)		// Low-Voltage Warning Voltage Select
 #define PMC_REGSC               *(volatile uint8_t  *)0x4007D002 // Regulator Status And Control register
+#define PMC_REGSC_BGEN			(uint8_t)0x10			// Bandgap Enable In VLPx Operation
+#define PMC_REGSC_ACKISO		(uint8_t)0x08			// Acknowledge Isolation
+#define PMC_REGSC_REGONS		(uint8_t)0x04			// Regulator In Run Regulation Status
+#define PMC_REGSC_BGBE			(uint8_t)0x01			// Bandgap Buffer Enable
 
 // Chapter 16: Low-Leakage Wakeup Unit (LLWU)
 #define LLWU_PE1                *(volatile uint8_t  *)0x4007C000 // LLWU Pin Enable 1 register
@@ -1189,11 +1250,11 @@ extern "C" {
 #define SPI_SR_RFDF			(uint32_t)0x00020000		// Receive FIFO Drain Flag
 #define SPI0_RSER               *(volatile uint32_t *)0x4002C030 // DSPI DMA/Interrupt Request Select and Enable Register
 #define SPI0_PUSHR              *(volatile uint32_t *)0x4002C034 // DSPI PUSH TX FIFO Register In Master Mode
-#define SPI0_PUSHR_CONT			(uint32_t)0x80000000		// 
-#define SPI0_PUSHR_CTAS(n)		(((n) & 7) << 28)		// 
-#define SPI0_PUSHR_EOQ			(uint32_t)0x08000000		// 
-#define SPI0_PUSHR_CTCNT		(uint32_t)0x04000000		// 
-#define SPI0_PUSHR_PCS(n)		(((n) & 31) << 16)		//
+#define SPI_PUSHR_CONT			(uint32_t)0x80000000		// 
+#define SPI_PUSHR_CTAS(n)		(((n) & 7) << 28)		// 
+#define SPI_PUSHR_EOQ			(uint32_t)0x08000000		// 
+#define SPI_PUSHR_CTCNT			(uint32_t)0x04000000		// 
+#define SPI_PUSHR_PCS(n)		(((n) & 31) << 16)		//
 #define SPI0_PUSHR_SLAVE        *(volatile uint32_t *)0x4002C034 // DSPI PUSH TX FIFO Register In Slave Mode
 #define SPI0_POPR               *(volatile uint32_t *)0x4002C038 // DSPI POP RX FIFO Register
 #define SPI0_TXFR0              *(volatile uint32_t *)0x4002C03C // DSPI Transmit FIFO Registers
