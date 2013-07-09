@@ -14,7 +14,7 @@
       3.3V -> Teensy 3.3v
       GND  -> Teensy GND
   
-  To use the openmusiclabs audio codec shield (as slave): set clock type to I2S_CLOCK_44K_INTERNAL.
+  To use the openmusiclabs audio codec shield (as slave): set clock type to I2S_CLOCK_44K_INTERNAL
   Note: this board cannot be used as master, only as slave.
       J1#2 GND
       J1#4 3.3v      (or 5V, but then you must NOT connect the analog pots A0/A1 to teensy pins directly)
@@ -22,11 +22,27 @@
       J2#1 SCL(A5)   -> Teensy 19 (I2C0_SCL)
       J2#2 SDA(A4)   -> Teensy 18 (I2C0_SDA)
       J3#3 SCK(D13)  -> Teensy 9  (I2S0_TX_BCLK)
-      J3#4 MISO(D12) n/c
+      J3#4 MISO(D12) not connected for this transmit-only example
       J3#5 MOSI(D11) -> Teensy 3  (I2S0_TXD0)
       J3#6 SS(D10)   -> Teensy 4  (I2S0_TX_FS)
       J4#3 CLKOUT(D5)    -> Teensy 11 (I2S0_MCLK)
 */
+
+#if 0
+
+// Settings for MikroE prototype board
+#define CLOCK_TYPE                  (I2S_CLOCK_EXTERNAL)
+#define CODEC_INTERFACE_FLAGS       (WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) | WM8731_INTERFACE_MASTER)
+#define CODEC_BITRATE               (WM8731_SAMPLING_RATE(hz48000))
+
+#else
+
+// Settings for OML audio codec shield
+#define CLOCK_TYPE                  (I2S_CLOCK_44K_INTERNAL)
+#define CODEC_INTERFACE_FLAGS       (WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) )
+#define CODEC_BITRATE               (WM8731_SAMPLING_RATE(hz44100))
+
+#endif
 
 
 /* Wolfson audio codec controlled by I2C */
@@ -37,7 +53,6 @@
 
 /* I2S digital audio */
 #include <i2s.h>
-const uint8_t clocktype = I2S_CLOCK_EXTERNAL;
 
 
 // audio data
@@ -64,13 +79,17 @@ void nextsinevalue()
 }
 
 
+// The on-board LED
+#define ONBOARDLED 13
 
 /* --------------------- Direct I2S data transfer, we get callback to put 2 words into the FIFO ----- */
 
 void i2s_tx_callback( int16_t *pBuf )
 {
+  digitalWrite(ONBOARDLED, 1);
   pBuf[0] = audx;
   pBuf[1] = audy;
+  digitalWrite(ONBOARDLED, 0);
   nextsinevalue();
 }
 
@@ -86,16 +105,17 @@ void setup()
   Serial.println( "Initializing." );
 
   delay(1000);
-  unsigned char interface = WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) | WM8731_INTERFACE_MASTER;
-  WM8731.begin( low, WM8731_SAMPLING_RATE(hz48000), interface );
+  WM8731.begin( low, CODEC_BITRATE, CODEC_INTERFACE_FLAGS );
   WM8731.setActive();
   WM8731.setOutputVolume( 127 );
   Serial.println( "Initialized I2C" );
   
   delay(1000);
-  I2STx0.begin( clocktype, i2s_tx_callback );
+  I2STx0.stop();
+  I2STx0.begin( CLOCK_TYPE, i2s_tx_callback );
   Serial.println( "Initialized I2S without DMA" );
   
+  pinMode(ONBOARDLED, OUTPUT);
   I2STx0.start();
 }
 

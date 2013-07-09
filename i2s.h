@@ -32,7 +32,7 @@
 
 // Audio configuration.  Edit these here if you need to.
 #define I2S_FRAME_SIZE         2            // 2=stereo
-#define I2S_IO_BIT_DEPTH       32           // Number of bits per sample in the physical data (8, 16 or 32)
+#define I2S_IO_BIT_DEPTH       16           // Number of bits per sample in the physical data (8, 16 or 32)
 #define I2S_BUFFER_BIT_DEPTH   16           // Number of bits per sample in the DMA buffer (8, 16 or 32)
 
 // Clock type constants
@@ -146,6 +146,8 @@ class I2S_class
          *                      This will be called with a pointer to a buffer
          *                      where you will read or write numSamples of _I2S_SAMPLE_T audio data.
          * @return      none.
+         *
+         * TODO !!!receive with DMA is not yet implemented!!! (transmit is ok)
          */
         void begin(uint8_t clk, void (*fptr)( _I2S_SAMPLE_T *pBuf, uint16_t numSamples ));
 
