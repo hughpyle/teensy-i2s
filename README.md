@@ -9,8 +9,10 @@ The example sketches use the WM8731 stereo codec with this [library](https://git
 
 Current status:
 
-* Transmit and Receive both implemented with and without DMA.
-* Not very much of anything is tested.
+* Transmit implemented with and without DMA.
+* Receive implemented without DMA.
+* Examples for the MikroE proto board and Open Codec Labs shield, which both use WM8731 codec.
+* Not very much of anything is tested.  Lots of things don't work right.
 * Patches and suggestions please!
 
 For more status, see the [forum](http://forum.pjrc.com/threads/15748-Teensy3-I2S-with-DMA).
