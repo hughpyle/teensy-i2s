@@ -13,6 +13,7 @@ Current status:
 
 * Stereo Transmit and Receive implemented with and without DMA.
 * Current examples are tested with 16-bit audio and the Open Codec Labs shield.
+* Receive is synchronized to Transmit, so may not actually work if Transmit is not running.  Change I2S_RCR2_SYNC(1) to I2S_RCR2_SYNC(0) to work around this.  Later I'll make it switchable.
 * Patches and suggestions please!
 
 For more status, see the [forum](http://forum.pjrc.com/threads/15748-Teensy3-I2S-with-DMA).
