@@ -1,3 +1,5 @@
+/* TODO synchronous receive only if we choose it explicitly */
+
 /*
   I2S digital audio demonstrator for Teensy 3.0
   Interfaces using Wolfson WM8731 codec.
@@ -72,33 +74,9 @@ Rx pin 11 // I2S0_RX_BCLK
 
 /* Circular buffer for audio samples, interleaved left & right channel */
 const uint16_t buffersize = 2; // 2048;
-int16_t buffer[buffersize];
+volatile int16_t buffer[buffersize];
 uint16_t nTX = 0;
 uint16_t nRX = 0;
-
-
-// audio data
-int16_t audf, audx, audy, audd;
-int32_t nnn=0;
-
-void initsinevalue()
-{
-  audf = 45 + (rand() % 48);                                // midi note number
-  float f = (440.0 / 32) * pow(2, ((float)audf - 9) / 12);  // Hz.  For realz, use a lookup table.
-  audd = 2.0 * sin(PI*f/48000) * 32767;                     // delta (q15_t)
-  audx = 0;
-  audy = 0.9 * 32767;                                       // start somewhere near full-scale
-}
-
-void nextsinevalue() 
-{
-  nnn++;
-  if(nnn>48000) {nnn=0;initsinevalue();};                                // reset every second
-//  if(nnn>24000){nnn=0;audx=audx<<1;if(audx==0)audx=1;b=audx;};return;  // marching blip
-//  audx+=4;if(nnn>512){nnn=0;audx=-2048;};b=audx;return;                // stair
-//  b = 0xACCF0010; audx=0xACCF; return;                                 // const pattern
-  audx+=((audd*audy)>>15)&0xFFFFu; audy-=((audd*audx)>>15)&0xFFFFu;      // sinewaves http://cabezal.com/misc/minsky-circles.html
-}
 
 
 /* --------------------- Direct I2S Receive, we get callback to read 2 words from the FIFO ----- */
@@ -111,6 +89,7 @@ void i2s_rx_callback( int16_t *pBuf )
   if( nRX>=buffersize ) nRX=0;
 }
 
+
 /* --------------------- Direct I2S Transmit, we get callback to put 2 words into the FIFO ----- */
 
 void i2s_tx_callback( int16_t *pBuf )
@@ -120,7 +99,6 @@ void i2s_tx_callback( int16_t *pBuf )
   pBuf[1] = buffer[nTX++];
   if( nTX>=buffersize ) nTX=0;
 }
-
 
 
 /* ----------------------- begin -------------------- */

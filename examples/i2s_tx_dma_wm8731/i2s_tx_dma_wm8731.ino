@@ -14,7 +14,7 @@
       3.3V -> Teensy 3.3v
       GND  -> Teensy GND
   
-  To use the openmusiclabs audio codec shield (as slave): set clock type to I2S_CLOCK_44K_INTERNAL.
+  To use the openmusiclabs audio codec shield (as slave): set clock type to I2S_CLOCK_44K_INTERNAL
   Note: this board cannot be used as master, only as slave.
       J1#2 GND
       J1#4 3.3v      (or 5V, but then you must NOT connect the analog pots A0/A1 to teensy pins directly)
@@ -31,6 +31,7 @@
 #if 0
 
 // Settings for MikroE prototype board
+#define clock_per_sec               48000
 #define CLOCK_TYPE                  (I2S_CLOCK_EXTERNAL)
 #define CODEC_INTERFACE_FLAGS       (WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) | WM8731_INTERFACE_MASTER)
 #define CODEC_BITRATE               (WM8731_SAMPLING_RATE(hz48000))
@@ -38,6 +39,7 @@
 #else
 
 // Settings for OML audio codec shield
+#define clock_per_sec               44100
 #define CLOCK_TYPE                  (I2S_CLOCK_44K_INTERNAL)
 #define CODEC_INTERFACE_FLAGS       (WM8731_INTERFACE_FORMAT(I2S) | WM8731_INTERFACE_WORDLEN(bits16) )
 #define CODEC_BITRATE               (WM8731_SAMPLING_RATE(hz44100))
@@ -63,7 +65,7 @@ void initsinevalue()
 {
   audf = 45 + (rand() % 48);                                // midi note number
   float f = (440.0 / 32) * pow(2, ((float)audf - 9) / 12);  // Hz.  For realz, use a lookup table.
-  audd = 2.0 * sin(PI*f/48000) * 32767;                     // delta (q15_t)
+  audd = 2.0 * sin(PI*f/clock_per_sec) * 32767;             // delta (q15_t)
   audx = 0;
   audy = 0.9 * 32767;                                       // start somewhere near full-scale
 }
@@ -71,7 +73,7 @@ void initsinevalue()
 void nextsinevalue() 
 {
   nnn++;
-  if(nnn>48000) {nnn=0;initsinevalue();};                                // reset every second
+  if(nnn>(clock_per_sec)) {nnn=0;initsinevalue();};                      // reset every second
 //  if(nnn>24000){nnn=0;audx=audx<<1;if(audx==0)audx=1;b=audx;};return;  // marching blip
 //  audx+=4;if(nnn>512){nnn=0;audx=-2048;};b=audx;return;                // stair
 //  b = 0xACCF0010; audx=0xACCF; return;                                 // const pattern
@@ -79,18 +81,13 @@ void nextsinevalue()
 }
 
 
-// The on-board LED
-#define ONBOARDLED 13
-
 /* ----------------------- DMA transfer, we get callback to fill one of the ping-pong buffers ------ */
 void dma_tx_callback( int16_t *pBuf, uint16_t len )
 {
   while( len>0 )
   {
-    digitalWrite(ONBOARDLED, 1);
     *pBuf++ = audx;
     *pBuf++ = audy;
-    digitalWrite(ONBOARDLED, 0);
     nextsinevalue();
     len--;
     len--;
@@ -116,10 +113,10 @@ void setup()
   Serial.println( "Initialized I2C" );
   
   delay(1000);
+  I2STx0.stop();
   I2STx0.begin( CLOCK_TYPE, dma_tx_callback );
   Serial.println( "Initialized I2S with DMA" );
   
-  pinMode(ONBOARDLED, OUTPUT);
   I2STx0.start();  
 }
 

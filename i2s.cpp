@@ -44,9 +44,6 @@ static _I2S_SAMPLE_T _i2s_Rx_Buffer[I2S_FRAME_SIZE];
 static _I2S_SAMPLE_T _i2s_Tx_Buffer[I2S_FRAME_SIZE];
 
 
-#define FRSZ (I2S_FRAME_SIZE-1)
-#define SYWD (I2S_IO_BIT_DEPTH-1)
-
 
 I2S_class::I2S_class(uint8_t isRx)
 {
@@ -83,6 +80,7 @@ void I2S_class::start()
             I2S0_RCSR |= I2S_RCSR_RE            // Receive Enable
                        | I2S_RCSR_BCE           // Bit Clock Enable
                        | I2S_RCSR_FRDE          // FIFO Request DMA Enable
+                       | I2S_RCSR_FR            // FIFO Reset
                        ;
         }
         else
@@ -91,6 +89,7 @@ void I2S_class::start()
             I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
                        | I2S_TCSR_BCE           // Bit Clock Enable
                        | I2S_TCSR_FRDE          // FIFO Request DMA Enable
+                       | I2S_TCSR_FR            // FIFO Reset
                        ;
         }
     }
@@ -104,6 +103,7 @@ void I2S_class::start()
             I2S0_RCSR |= I2S_RCSR_RE            // Receive Enable
                        | I2S_RCSR_BCE           // Bit Clock Enable
                        | I2S_RCSR_FRIE          // FIFO Request Interrupt Enable
+                       | I2S_RCSR_FR            // FIFO Reset
                        ;
         }
         else
@@ -113,6 +113,7 @@ void I2S_class::start()
             I2S0_TCSR |= I2S_TCSR_TE            // Transmit Enable
                        | I2S_TCSR_BCE           // Bit Clock Enable
                        | I2S_TCSR_FRIE          // FIFO Request Interrupt Enable
+                       | I2S_TCSR_FR            // FIFO Reset
                        ;
         }
     }
@@ -122,8 +123,14 @@ void I2S_class::stop()
 {
     if( useDMA )
     {
-        /* TODO */
-        NVIC_DISABLE_IRQ(IRQ_DMA_CH0);
+        if( receive )
+        {
+            NVIC_DISABLE_IRQ(IRQ_DMA_CH1);
+        }
+        else
+        {
+            NVIC_DISABLE_IRQ(IRQ_DMA_CH0);
+        }
     }
     else
     {
@@ -288,6 +295,16 @@ void I2S_class::init()
 
 }
 
+// Configures the number of words in each frame. The value written should be one less than the number of
+// words in the frame (for example, write 0 for one word per frame). The maximum supported frame size is
+// 16 words.
+#define FRSZ (I2S_FRAME_SIZE-1)
+
+// Configures the length of the frame sync in number of bit clocks. The value written must be one less than
+// the number of bit clocks. For example, write 0 for the frame sync to assert for one bit clock only. The sync
+// width cannot be configured longer than the first word of the frame.
+#define SYWD (I2S_IO_BIT_DEPTH-1)
+
 
 void I2S_class::i2s_transmit_init()
 {
@@ -307,15 +324,15 @@ void I2S_class::i2s_transmit_init()
     I2S0_TCR2 |= I2S_TCR2_BCP;              // BCLK polarity: active low
     if( clock != I2S_CLOCK_EXTERNAL )
     {
-        I2S0_TCR2 |= I2S_TCR2_MSEL(0);          // use bus clock as BCLK source
-        I2S0_TCR2 |= I2S_TCR2_DIV(7);           // divide internal master clock to generate bit clock
+        I2S0_TCR2 |= I2S_TCR2_MSEL(1);          // use mc1 (notbus clock as BCLK source
+        I2S0_TCR2 |= I2S_TCR2_DIV(3);           // divide internal master clock to generate bit clock
         I2S0_TCR2 |= I2S_TCR2_BCD;              // BCLK is generated internally (master mode)
     }
     // --------------------------------------------------------------------------------    
     I2S0_TCR3  = I2S_TCR3_TCE;              // transmit data channel is enabled
     // --------------------------------------------------------------------------------
     I2S0_TCR4  = I2S_TCR4_FRSZ(FRSZ);       // frame size in words (plus one)
-    I2S0_TCR4 |= I2S_TCR4_SYWD(SYWD);       // bit width of a word (plus one)
+    I2S0_TCR4 |= I2S_TCR4_SYWD(SYWD);       // number of bits in frame sync (plus one)
     I2S0_TCR4 |= I2S_TCR4_MF;               // MSB (most significant bit) first
     I2S0_TCR4 |= I2S_TCR4_FSE;              // Frame sync one bit before the frame
     if( clock != I2S_CLOCK_EXTERNAL )
@@ -372,14 +389,21 @@ void I2S_class::i2s_receive_init()
 
 void I2S_class::i2s_tx_callback(void)
 {
+    if(!(I2S0_TCSR & I2S_TCSR_FRF))  return;
+    
     // Call your function to get the data into our buffer
     fnI2SCallback( _i2s_Tx_Buffer );
 
     // Copy the data from our buffer into FIFO
-    for( uint8_t i=0; i<I2S_FRAME_SIZE-1; i++ )
-    {
-        I2S0_TDR0 = (uint32_t)_i2s_Tx_Buffer[i];
-    }
+    if( I2S_FRAME_SIZE>0 ) I2S0_TDR0 = (uint32_t)(_i2s_Tx_Buffer[0]);
+    if( I2S_FRAME_SIZE>1 ) I2S0_TDR0 = (uint32_t)(_i2s_Tx_Buffer[1]);
+    if( I2S_FRAME_SIZE>2 ) I2S0_TDR0 = (uint32_t)(_i2s_Tx_Buffer[2]);
+    if( I2S_FRAME_SIZE>3 ) I2S0_TDR0 = (uint32_t)(_i2s_Tx_Buffer[3]);
+    
+    //for( uint8_t i=0; i<I2S_FRAME_SIZE-1; i++ )
+    //{
+        //I2S0_TDR0 = (uint32_t)(_I2S_SAMPLE_T)(_i2s_Tx_Buffer[i]);
+    //}
     
     if(I2S0_TCSR & I2S_TCSR_FEF)  I2S0_TCSR |= I2S_TCSR_FEF; // clear if underrun
     if(I2S0_TCSR & I2S_TCSR_SEF)  I2S0_TCSR |= I2S_TCSR_SEF; // clear if frame sync error
@@ -388,17 +412,16 @@ void I2S_class::i2s_tx_callback(void)
 void I2S_class::i2s_rx_callback(void)
 {  
     // Copy the data from FIFO into our buffer
-    for( uint8_t i=0; i<I2S_FRAME_SIZE-1; i++ )
-    {
-        _i2s_Rx_Buffer[i] = (_I2S_SAMPLE_T)I2S0_RDR0;
-    }
+    if( I2S_FRAME_SIZE>0 ) _i2s_Rx_Buffer[0] = (_I2S_SAMPLE_T)I2S0_RDR0;
+    if( I2S_FRAME_SIZE>1 ) _i2s_Rx_Buffer[1] = (_I2S_SAMPLE_T)I2S0_RDR0;
+    if( I2S_FRAME_SIZE>2 ) _i2s_Rx_Buffer[2] = (_I2S_SAMPLE_T)I2S0_RDR0;
+    if( I2S_FRAME_SIZE>3 ) _i2s_Rx_Buffer[3] = (_I2S_SAMPLE_T)I2S0_RDR0;
 
     // Call your function to handle the data
     fnI2SCallback( _i2s_Rx_Buffer );
     
    if(I2S0_RCSR & I2S_RCSR_FEF)  I2S0_RCSR |= I2S_RCSR_FEF; // clear if underrun
    if(I2S0_RCSR & I2S_RCSR_SEF)  I2S0_RCSR |= I2S_RCSR_SEF; // clear if frame sync error
-   
 }
 
 
@@ -446,7 +469,7 @@ void I2S_class::dma_transmit_init(void)
     SIM_SCGC7 |= SIM_SCGC7_DMA;
     
     // configure DMA_MUX
-    DMAMUX0_CHCFG0 = 0;
+    // DMAMUX0_CHCFG0 = 0;
     DMAMUX0_CHCFG0 = DMAMUX_SOURCE_I2S0_TX;
 
     // Enable IRQ on the DMA channel 0
@@ -473,26 +496,26 @@ void I2S_class::dma_transmit_init(void)
    
     // fill the TCD regs
     DMA_TCD0_SADDR          = (const volatile void *) _dma_Tx_Buffer_A ;            // alternated with _dma_Buffer_B by our interrupt handler
-    DMA_TCD0_SOFF           = 2;                                    // 2 byte offset 
+    DMA_TCD0_SOFF           = 2;                                    // 2 byte source offset after each transfer
     DMA_TCD0_ATTR           = DMA_ATTR_SMOD(0)                      // No source modulo
                             | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)   // Source data 16 bit
-                            | DMA_ATTR_DMOD(0)                      // No destination modulo
+                            | DMA_ATTR_DMOD(2)                      // Destination modulo 2
                             | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Destination 16 bit
     DMA_TCD0_NBYTES_MLNO    = 2;                                    // Transfer two bytes in each service request
-    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // source address will always be newly written before each new start
-    DMA_TCD0_DADDR          = (volatile void *) &I2S0_TDR0;                // Destination is the I2S data register
-    DMA_TCD0_DOFF           = 0;                                    // No destination offset after each write
+    DMA_TCD0_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // Source address will always be newly written before each new start
+    DMA_TCD0_DADDR          = (volatile void *) &I2S0_TDR0;        // Destination is the I2S data register
+    DMA_TCD0_DOFF           = 0;                                    // No destination offset after each transfer
     DMA_TCD0_DLASTSGA       = 0;                                    // No scatter/gather
-    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // major loop iteration count = total samples (128)
-    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // major loop iteration count = total samples (128), no channel links
-    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR                      // interrupt on major loop completion
+    DMA_TCD0_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // Major loop iteration count = total samples (128)
+    DMA_TCD0_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // Major loop iteration count = total samples (128), no channel links
+    DMA_TCD0_CSR            = DMA_CSR_INTMAJOR                      // Interrupt on major loop completion
                             | DMA_CSR_BWC(3);                       // DMA bandwidth control
 
     // enable DMA channel 0 requests
-    DMA_ERQ = DMA_ERQ_ERQ0;
+    // DMA_ERQ = DMA_ERQ_ERQ0;
     DMA_SERQ = DMA_SERQ_SERQ(0);
 
-    // enable DMAMIX
+    // enable DMAMUX
     DMAMUX0_CHCFG0 |= DMAMUX_ENABLE /* | DMAMUX_TRIG */;
 
     // Set active
@@ -504,7 +527,66 @@ void I2S_class::dma_transmit_init(void)
 
 void I2S_class::dma_receive_init(void)  
 {
-    /* TODO */
+    // Enable clock to the DMAMUX module
+    SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+    // And clock to the DMA module
+    SIM_SCGC7 |= SIM_SCGC7_DMA;
+    
+    // configure DMA_MUX
+    // DMAMUX0_CHCFG1 = 0;
+    DMAMUX0_CHCFG1 = DMAMUX_SOURCE_I2S0_RX;
+
+    // Enable IRQ on the DMA channel 1
+    NVIC_ENABLE_IRQ(IRQ_DMA_CH1);
+
+    // Set inactive
+    DMA_TCD1_CSR &= ~(DMA_CSR_ACTIVE);
+    
+#ifndef ROUNDROBIN
+    // Set channel priorities (each must be unique)
+    DMA_DCHPRI3 = 0;
+    DMA_DCHPRI2 = 1;
+    DMA_DCHPRI1 = 2;
+    DMA_DCHPRI0 = 3;  // cannot be pre-empted, can pre-empt, highest priority
+#endif
+
+    // Control register
+    DMA_CR = 0              // Normal
+           | DMA_CR_EMLM    // Enable minor looping
+#ifdef ROUNDROBIN
+           | DMA_CR_ERCA    // Enable round-robin channel arbitration
+#endif
+           ;
+   
+    // fill the TCD regs
+    DMA_TCD1_SADDR          = (const volatile void *) &I2S0_RDR0;  // Source is the I2S data register
+    DMA_TCD1_SOFF           = 0;                                    // No source offset after each transfer
+    DMA_TCD1_ATTR           = DMA_ATTR_SMOD(2)                      // No source modulo
+                            | DMA_ATTR_SSIZE(DMA_ATTR_SIZE_16BIT)   // Source data 16 bit
+                            | DMA_ATTR_DMOD(0)                      // No destination modulo
+                            | DMA_ATTR_DSIZE(DMA_ATTR_SIZE_16BIT);  // Destination 16 bit
+    DMA_TCD1_NBYTES_MLNO    = 2;                                    // Transfer two bytes in each service request
+    DMA_TCD1_SLAST          = 0;//-(DMA_BUFFER_SIZE*2);             // Source address will always be newly written before each new start
+    DMA_TCD1_DADDR          = (volatile void *) _dma_Rx_Buffer_A ;  // Alternated with _dma_Buffer_B by our interrupt handler
+    DMA_TCD1_DOFF           = 2;                                    // 2 bytes destination offset after each transfer
+    DMA_TCD1_DLASTSGA       = 0;                                    // No scatter/gather
+    DMA_TCD1_CITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_CITER_MASK;     // Major loop iteration count = total samples (128)
+    DMA_TCD1_BITER_ELINKNO  = DMA_BUFFER_SIZE & DMA_BITER_MASK;     // Major loop iteration count = total samples (128), no channel links
+    DMA_TCD1_CSR            = DMA_CSR_INTMAJOR                      // Interrupt on major loop completion
+                            | DMA_CSR_BWC(3);                       // DMA bandwidth control
+
+    // enable DMA channel 1 requests
+    // DMA_ERQ = DMA_ERQ_ERQ1;
+    DMA_SERQ = DMA_SERQ_SERQ(1);
+
+    // enable DMAMUX
+    DMAMUX0_CHCFG1 |= DMAMUX_ENABLE /* | DMAMUX_TRIG */;
+
+    // Set active
+    DMA_TCD1_CSR |= DMA_CSR_ACTIVE;
+
+    // To initiate from software, set DMA_CSR[start]
+    //DMA_TCD1_CSR |= DMA_CSR_START;
 }
 
 
@@ -563,7 +645,7 @@ void I2S_class::dma_rx_callback(void)
         yourBuf = _dma_Rx_Buffer_B;
     }
     // DMA will read into one buffer
-    DMA_TCD1_SADDR = (const volatile void *)dmaBuf;
+    DMA_TCD1_DADDR = (volatile void *)dmaBuf;
     // while you read the other
     fnDMACallback( yourBuf, DMA_BUFFER_SIZE );
 }
